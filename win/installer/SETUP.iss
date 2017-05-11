@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Launchy"
-#define MyAppVerName "Launchy 2.5.1 Beta 2"
+#define MyAppVerName "Launchy 2.5 Beta 3"
 #define MyAppPublisher "Code Jelly"
 #define MyAppURL "http://www.launchy.net"
 #define MyAppExeName "Launchy.exe"
@@ -62,24 +62,15 @@ Source: ..\..\translations\launchy_zh.qm; DestDir: {app}\tr\; Flags: ignoreversi
 
 ; Libs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-Source: ..\msvcp80.dll; DestDir: {app}\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
-Source: ..\msvcr80.dll; DestDir: {app}\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
-Source: ..\Microsoft.VC80.CRT.manifest; DestDir: {app}\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
 Source: ..\..\release\QtCore4.dll; DestDir: {app}; Flags: ignoreversion
 Source: ..\..\release\QtGui4.dll; DestDir: {app}; Flags: ignoreversion
 Source: ..\..\release\QtNetwork4.dll; DestDir: {app}; Flags: ignoreversion
-
-Source: ..\msvcp80.dll; DestDir: {app}\imageformats\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
-Source: ..\msvcr80.dll; DestDir: {app}\imageformats\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
-Source: ..\Microsoft.VC80.CRT.manifest; DestDir: {app}\imageformats\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
 Source: ..\..\release\imageformats\qmng4.dll; DestDir: {app}\imageformats; Flags: ignoreversion
+Source: ..\msvcp80.dll; DestDir: {app}\Microsoft.VC80.CRT\; Flags: ignoreversion
+Source: ..\msvcr80.dll; DestDir: {app}\Microsoft.VC80.CRT\; Flags: ignoreversion
+Source: ..\Microsoft.VC80.CRT.manifest; DestDir: {app}\Microsoft.VC80.CRT\; Flags: ignoreversion
 
 ; Plugins
-; plugins may require all 3 runtimes
-Source: ..\msvcp80.dll; DestDir: {app}\plugins\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
-Source: ..\msvcr80.dll; DestDir: {app}\plugins\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
-Source: ..\msvcp80.dll; DestDir: {app}\plugins\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
-Source: ..\Microsoft.VC80.CRT.manifest; DestDir: {app}\plugins\Microsoft.VC80.CRT\; Flags: ignoreversion; OnlyBelowVersion: 0, 6.0
 Source: ..\..\release\plugins\controly.dll; DestDir: {app}\plugins\; Flags: ignoreversion
 Source: ..\..\release\plugins\calcy.dll; DestDir: {app}\plugins\; Flags: ignoreversion
 Source: ..\..\release\plugins\gcalc.dll; DestDir: {app}\plugins\; Flags: ignoreversion
@@ -260,3 +251,6 @@ begin
       Result := true;
   end;
 end;
+
+
+

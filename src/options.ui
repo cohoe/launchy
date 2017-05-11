@@ -21,7 +21,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>4</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="General">
       <attribute name="title">
@@ -570,6 +570,13 @@
              </widget>
             </item>
             <item>
+             <widget class="QCheckBox" name="genUseWildcards">
+              <property name="text">
+               <string>Allow wildcards in browse mode</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QCheckBox" name="genUpdateCheck">
               <property name="text">
                <string>Check for new versions of Launchy on startup</string>
@@ -895,16 +902,56 @@
            </layout>
           </widget>
          </item>
+         <item>
+          <layout class="QVBoxLayout"/>
+         </item>
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout">
+        <layout class="QVBoxLayout">
          <item>
-          <widget class="QPushButton" name="catRescan">
-           <property name="text">
-            <string>Rescan Catalog</string>
-           </property>
-          </widget>
+          <layout class="QHBoxLayout">
+           <item>
+            <widget class="QPushButton" name="catRescan">
+             <property name="text">
+              <string>Rescan Catalog</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer>
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QLabel" name="catSize">
+             <property name="text">
+              <string>Indexing 0 items</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer>
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
          </item>
          <item>
           <widget class="QProgressBar" name="catProgress">
@@ -922,22 +969,6 @@
            </property>
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="catSize">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="text">
-            <string>Indexing 0 items</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignCenter</set>
            </property>
           </widget>
          </item>
@@ -1087,7 +1118,7 @@ p, li { white-space: pre-wrap; }
           </widget>
          </item>
          <item row="3" column="0">
-          <widget class="QLabel" name="about_homepage">
+          <widget class="QLabel" name="label_2">
            <property name="minimumSize">
             <size>
              <width>321</width>
@@ -1112,7 +1143,7 @@ p, li { white-space: pre-wrap; }
             <set>Qt::AlignCenter</set>
            </property>
            <property name="wordWrap">
-            <bool>true</bool>
+            <bool>false</bool>
            </property>
            <property name="openExternalLinks">
             <bool>true</bool>

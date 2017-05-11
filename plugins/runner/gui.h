@@ -24,14 +24,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "FileBrowserDelegate.h"
 #include "ui_dlg.h"
 #include "globals.h"
-#include <QSettings>
+
 
 class Gui : public QWidget, private Ui::Dlg
 {
 
   Q_OBJECT
 public:
-	Gui(QWidget* parent, QSettings* settings);
+	Gui(QWidget* parent);
 	~Gui() { this->hide(); }
 	void writeOptions();
 
@@ -44,7 +44,6 @@ private slots:
 private:
 	void appendRow(const QString& name, const QString& file, const QString& args);
 
-	QSettings* settings;
 	FileBrowserDelegate delegate;
 };
 

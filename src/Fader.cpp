@@ -26,7 +26,6 @@ Fader::Fader(QObject* parent) :
 	QThread(parent),
 	keepRunning(true)
 {
-	setObjectName("Fader");
 }
 
 
@@ -37,7 +36,7 @@ Fader::~Fader()
 
 void Fader::fadeIn(bool quick)
 {
-        int time = gSettings->value("GenOps/fadein", 0).toInt();
+	int time = gSettings->value("GenOps/fadein", 0).toInt();
 
 	mutex.lock();
 	targetLevel = gSettings->value("GenOps/opaqueness", 100).toInt() / 100.0;
@@ -50,7 +49,7 @@ void Fader::fadeIn(bool quick)
 	}
 	mutex.unlock();
 
-	if (quick || delay == 0)
+	if (quick)
 	{
 		// stop any current slow fades
 		stop();
@@ -83,7 +82,7 @@ void Fader::fadeOut(bool quick)
 
 	// qDebug() << level << " to " << targetLevel << " delay " << delay;
 
-	if (quick || delay == 0)
+	if (quick)
 	{
 		// stop any current slow fades
 		stop();

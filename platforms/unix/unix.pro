@@ -13,8 +13,8 @@ LIBS += -lX11 -lXext -lXrender
 unix {
  PREFIX = /usr
  DEFINES += SKINS_PATH=\\\"$$PREFIX/share/launchy/skins/\\\" \
-           PLUGINS_PATH=\\\"$$PREFIX/lib64/launchy/plugins/\\\" \
-           PLATFORMS_PATH=\\\"$$PREFIX/lib64/launchy/\\\"
+           PLUGINS_PATH=\\\"$$PREFIX/lib/launchy/plugins/\\\" \
+           PLATFORMS_PATH=\\\"$$PREFIX/lib/launchy/\\\"
  target.path = $$PREFIX/lib/launchy/
  INSTALLS += target
 }

@@ -1,6 +1,6 @@
 /*
 Launchy: Application Launcher
-Copyright (C) 2009-2010  Simon Capewell, Josh Karlin
+Copyright (C) 2009  Simon Capewell
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -26,10 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 void FileSearch::search(const QString& searchText, QList<CatItem>& searchResults, InputDataList& inputData)
 {
-	qDebug() << "Searching file system for" << searchText;
-
 	QString searchPath = QDir::fromNativeSeparators(searchText);
-	gSearchText = searchPath;
 
 	if (searchPath.startsWith("~"))
 		searchPath.replace("~", QDir::homePath());
@@ -39,9 +36,8 @@ void FileSearch::search(const QString& searchText, QList<CatItem>& searchResults
 	{
 		// Special case for Windows: list available drives
 		QFileInfoList driveList = QDir::drives();
-		for (int i = driveList.length()-1; i >= 0; --i)
+		foreach(QFileInfo info, driveList)
 		{
-			QFileInfo info = driveList[i];
 			// Retrieve volume name
 			QString volumeName;
 			WCHAR volName[MAX_PATH];
@@ -59,88 +55,88 @@ void FileSearch::search(const QString& searchText, QList<CatItem>& searchResults
 		searchPath += "/";
 #endif
 
-	// Split the string on the last slash
-	QString directoryPart = searchPath.section("/", 0, -2);
-        if (directoryPart == "")
-            directoryPart = "/";
-	QString filePart = searchPath.section("/", -1);
-	bool isDirectory = filePart.length() == 0;
-	bool sort = true;
-	bool listPopulated = false;
-	QStringList itemList;
-	QDir dir(directoryPart);
-
-#ifdef Q_WS_WIN
-        // This is a windows network search
+	// Network searches are too slow to run in the main thread
 	if (searchPath.startsWith("//"))
 	{
-		// Exit if the user doesn't want to browse networks
 		if (!gSettings->value("GenOps/showNetwork", true).toBool())
 			return;
 
-		// Check for a search against just the network name
 		QRegExp re("//([a-z0-9\\-]+)?$", Qt::CaseInsensitive);
 		if (re.exactMatch(searchPath))
 		{
-			// Get a list of devices on the network. This will be filtered and sorted later.
-			platform->getComputers(itemList);
-			isDirectory = false;
-			listPopulated = true;
-			sort = false;
-		}
-	}
-#endif
-	if (!listPopulated)
-	{
-		// Exit if the path doesn't exist
-		if (!dir.exists())
-			return;
+			inputData.last().setLabel(LABEL_FILE);
 
-		// We have a directory, get a list of files and directories within the directory
-		QDir::Filters filters = QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot;
+			QList<QString> computers;
+			platform->getComputers(computers);
+
+			// Filter computer names by search text
+			foreach(QString computer, computers)
+			{
+				QString computerPath = "//" + computer;
+				if (computerPath.indexOf(searchPath, 0, Qt::CaseInsensitive) == 0)
+				{
+					CatItem item(QDir::toNativeSeparators(computerPath), computer);
+					item.id = HASH_LAUNCHYFILE;
+					searchResults.push_back(item);
+				}
+			}
+		}
+		return;
+	}
+
+	// Split the string on the last slash
+	QString directoryPart = searchPath.mid(0,searchPath.lastIndexOf("/")+1);
+	QString filePart = searchPath.mid(searchPath.lastIndexOf("/")+1);
+
+	QFileInfo info(directoryPart);
+	if (!info.isDir())
+		return;
+
+	inputData.last().setLabel(LABEL_FILE);
+
+	// Okay, we have a directory, find files that match "file"
+	QDir dir(directoryPart);
+	QStringList fileList;
+	QDir::Filters filters = QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot;
 #ifndef Q_WS_WIN
-		filters |= QDir::CaseSensitive;
-#else
-		filePart = filePart.toLower();
+        filters |= QDir::CaseSensitive;
 #endif
 
-		if (gSettings->value("GenOps/showHiddenFiles", false).toBool())
-			filters |= QDir::Hidden;
+	if (gSettings->value("GenOps/showHiddenFiles", false).toBool())
+		filters |= QDir::Hidden;
 
-		itemList = dir.entryList(filters, QDir::DirsLast | QDir::IgnoreCase | QDir::LocaleAware);
-	}
-
-	for (int i = itemList.length()-1; i >= 0; --i)
+	bool userWildcard = false;
+	QString fileSearch;
+	if (gSettings->value("GenOps/wildcardFileSearch", false).toBool())
 	{
-		QString fileName = itemList[i];
-		QString filePath = QDir::cleanPath(dir.absolutePath() + "/" + fileName);
-		CatItem item(QDir::toNativeSeparators(filePath), fileName);
-                if (filePart.length() == 0 || Catalog::matches(&item, filePart.toLower()))
+		userWildcard = filePart.contains("*") || filePart.contains("?") || filePart.contains("[");
+		fileSearch = filePart;
+	}
+	fileSearch += "*";
+
+	fileList = dir.entryList(QStringList(fileSearch), filters, QDir::DirsLast | QDir::IgnoreCase | QDir::LocaleAware);
+
+	foreach(QString fileName, fileList)
+	{
+		if (userWildcard || fileName.indexOf(filePart, 0, Qt::CaseInsensitive) == 0)
 		{
+			QString filePath = dir.absolutePath() + "/" + fileName;
+			filePath = QDir::cleanPath(filePath);
+			CatItem item(QDir::toNativeSeparators(filePath), fileName);
 			item.id = HASH_LAUNCHYFILE;
-			searchResults.push_front(item);
+			searchResults.push_back(item);
 		}
 	}
 
-	// Set the sort and underline global to just the filename
-	gSearchText = filePart;
-
-	if (isDirectory)
+	// Showing a directory
+	if (filePart.count() == 0)
 	{
-		// We're showing a directory, add it as the top result
-		if (!directoryPart.endsWith("/"))
-			directoryPart += "/";
 		QString fullPath = QDir::toNativeSeparators(directoryPart);
-		QString name = dir.dirName();
-		CatItem item(fullPath, name.length() == 0 ? fullPath : name);
+		if (!fullPath.endsWith(QDir::separator()))
+			fullPath += QDir::separator();
+		QString name = info.dir().dirName();
+		CatItem item(fullPath, name.count() == 0 ? fullPath : name);
 		item.id = HASH_LAUNCHYFILE;
 		searchResults.push_front(item);
 	}
-	else if (sort)
-	{
-		// If we're not matching exactly and there's a filename then do a priority sort
-		qSort(searchResults.begin(), searchResults.end(), CatLessNoPtr);
-	}
-
-	inputData.last().setLabel(LABEL_FILE);
 }

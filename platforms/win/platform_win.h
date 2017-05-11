@@ -24,7 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "platform_base.h"
 #include "platform_win_util.h"
 #include "platform_base_hotkey.h"
-#include "minidump.h"
 
 
 class PlatformWin : public PlatformBase 
@@ -44,12 +43,11 @@ public:
 	virtual bool supportsAlphaBorder() const;
 	virtual bool isAlreadyRunning() const;
 	virtual void sendInstanceCommand(int command);
-	virtual bool getComputers(QStringList& computers) const;
+	virtual bool getComputers(QList<QString>& computers) const;
 
 private:
 	HANDLE localMutex, globalMutex;
 	LimitSingleInstance* instance;
-	MiniDumper minidumper;
 };
 
 

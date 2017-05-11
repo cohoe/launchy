@@ -16,9 +16,10 @@ SOURCES = plugin_interface.cpp \
 TARGET = calcy
 win32 { 
     CONFIG -= embed_manifest_dll
-	LIBS += user32.lib shell32.lib
-	QMAKE_CXXFLAGS_RELEASE += /Zi
-	QMAKE_LFLAGS_RELEASE += /DEBUG
+    LIBS += shell32.lib
+    LIBS += user32.lib
+    % LIBS += Gdi32.lib
+    % LIBS += comctl32.lib
 }
 if(!debug_and_release|build_pass):CONFIG(debug, debug|release):DESTDIR = ../../debug/plugins
 if(!debug_and_release|build_pass):CONFIG(release, debug|release):DESTDIR = ../../release/plugins
@@ -26,8 +27,8 @@ if(!debug_and_release|build_pass):CONFIG(release, debug|release):DESTDIR = ../..
 
 unix:!macx {
     PREFIX = /usr
-    target.path = $$PREFIX/lib64/launchy/plugins/
-    icon.path = $$PREFIX/lib64/launchy/plugins/icons/
+    target.path = $$PREFIX/lib/launchy/plugins/
+    icon.path = $$PREFIX/lib/launchy/plugins/icons/
     icon.files = calcy.png
     INSTALLS += target \
         icon

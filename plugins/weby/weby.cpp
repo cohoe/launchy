@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "IconCache.h"
 #include "gui.h"
 
+WebyPlugin* gWebyInstance = NULL;
 
 int Suggest::currentId = 0;
 
@@ -83,6 +84,9 @@ void Suggest::httpGetFinished(bool error)
 
 void WebyPlugin::init()
 {
+	if (gWebyInstance == NULL)
+		gWebyInstance = this;
+
 	QSettings* set = *settings;
 
 	// get config / settings directory (base for 'temporary' icon cache dir)
@@ -481,7 +485,8 @@ void WebyPlugin::launchItem(QList<InputData>* inputData, CatItem* item)
 	for (; i < inputData->count(); i++)
 	{
 		QString txt = inputData->at(i).getText();
-		args.push_back(QUrl::toPercentEncoding(txt));
+		txt = QUrl::toPercentEncoding(txt);
+		args.push_back(txt);
 	}
 
 	// Is it a Firefox shortcut?
@@ -515,22 +520,9 @@ void WebyPlugin::launchItem(QList<InputData>* inputData, CatItem* item)
 				}
 				else
 				{
-					// Build the new string
-					QString out;
-					int curArg = 0;
-					for(int i = 0; i < file.size()-1; i++) {
-						QChar curchar = file[i];
-						QChar nextchar = file[i+1];
-						if (curchar == '%' && nextchar >= '0' && nextchar <= '9') {							
-							i += 1;
-							if (curArg < args.size()) {
-								out += args[curArg++];
-							}
-						} else {
-							out += curchar;
-						}
-					}
-					file = out;
+					// Fill additional parameter placeholders
+					for (int i = 0; i < args.size(); i++)
+						file = file.arg(args[i]);
 				}
 				break;
 			}
@@ -548,7 +540,7 @@ void WebyPlugin::launchItem(QList<InputData>* inputData, CatItem* item)
 	}
 
 	QUrl url(file);
-	runProgram(url.toString(), "", false);
+	runProgram(url.toString(), "");
 }
 
 
@@ -556,7 +548,7 @@ void WebyPlugin::doDialog(QWidget* parent, QWidget** newDlg)
 {
 	if (gui != NULL)
 		return;
-	gui.reset(new Gui(parent, *settings));
+	gui.reset(new Gui(parent));
 	*newDlg = gui.get();
 }
 
