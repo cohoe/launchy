@@ -205,9 +205,12 @@ void runProgram(QString path, QString args) {
         /* special case for KDE since some apps start behind other windows */
         cmd = "kstart --activate " + path.trimmed() + " " + args.trimmed();
     } else /* gnome, xfce, etc */ {
+        /* Fix from leonid-shevtsov
         path.replace("\"", "\\\"");
-        args.replace("\"", "\\\"");
+        #args.replace("\"", "\\\"");
         cmd = "sh -c \"" + path.trimmed() + " " + args.trimmed() + "\"";
+        */
+        cmd = path.trimmed() + " " + args.trimmed();
      }
 
 
