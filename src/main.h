@@ -37,6 +37,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "Fader.h"
 
 
+using namespace boost;
+
+
 enum CommandFlag
 {
 	None = 0,
@@ -62,7 +65,7 @@ public:
 
 	void executeStartupCommand(int command);
 
-	Catalog* catalog;
+	shared_ptr<Catalog> catalog;
 	PluginHandler plugins;
 
 	void showLaunchy(bool noFade);
@@ -75,7 +78,6 @@ public:
 	void setSkin(const QString& name);
 	void loadOptions();
 	int getHotkey() const;
-	void startUpdateTimer();
 
 protected:
     void paintEvent(QPaintEvent* event);
@@ -89,12 +91,12 @@ public slots:
 	void contextMenuEvent(QContextMenuEvent* event);
 	void showOptionsDialog();
 	void onHotkey();
+	void updateTimeout();
 	void dropTimeout();
 	void setOpaqueness(int level);
 	void httpGetFinished(bool result);
-	void catalogProgressUpdated(int);
+	void catalogProgressUpdated(float);
 	void catalogBuilt();
-	void buildCatalog();
 	void inputMethodEvent(QInputMethodEvent* event);
 	void keyPressEvent(QKeyEvent* event);
 	void inputKeyPressEvent(QKeyEvent* event);
@@ -102,13 +104,10 @@ public slots:
 	void alternativesKeyPressEvent(QKeyEvent* event);
 	void setFadeLevel(double level);
 	void showLaunchy();
-	void iconExtracted(int index, QString path, QIcon icon);
+	void buildCatalog();
+	void iconExtracted(int itemIndex, QIcon icon);
 	void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
-	void reloadSkin();
-
-protected:
-	void saveSettings();
-
+        void reloadSkin();
 private:
 	void createActions();
 	void applySkin(const QString& name);
@@ -117,9 +116,7 @@ private:
 	void updateVersion(int oldVersion);
 	void checkForUpdate();
 	void shouldDonate();
-	void updateAlternatives(bool resetSelection = true);
-	void showAlternatives();
-	void hideAlternatives();
+	void showAlternatives(bool show = true, bool resetSelection = true);
 	void parseInput(const QString& text);
 	void updateOutputWidgets(bool resetAlternativesSelection = true);
 	void searchOnInput();
@@ -133,7 +130,7 @@ private:
 	void addToHistory(QList<InputData>& item);
 	void startDropTimer();
 
-	QString currentSkin;
+        QString currentSkin;
 
 	Fader* fader;
 	QPixmap* frameGraphic;
@@ -157,10 +154,9 @@ private:
 
 	QTimer* updateTimer;
 	QTimer* dropTimer;
-	QThread builderThread;
+	shared_ptr<CatalogBuilder> catalogBuilder;
 	IconExtractor iconExtractor;
 	QIcon* condensedTempIcon;
-	CatItem outputItem;
 	QList<CatItem> searchResults;
 	InputDataList inputData;
 	CommandHistory history;

@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "main.h"
 #include "platform_win.h"
 #include "WinIconProvider.h"
-#include "minidump.h"
 
 
 // Override the main widget to handle incoming system messages. We could have done this in the QApplication 
@@ -46,11 +45,6 @@ public:
 			{
 				UpdateEnvironment();
 			}
-			break;
-
-		case WM_ENDSESSION:
-			// Ensure settings are saved
-			saveSettings();
 			break;
 
 		// Might need to capture these two messages if Vista gives any problems with alpha borders
@@ -85,10 +79,9 @@ LaunchyWidget* createLaunchyWidget(CommandFlags command)
 
 
 PlatformWin::PlatformWin(int& argc, char** argv) :
-	PlatformBase(argc, argv),
-	minidumper(_T("Launchy"))
+	PlatformBase(argc, argv)
 {
-	instance = new LimitSingleInstance(_T("Local\\{ASDSAD0-DCC6-49b5-9C61-ASDSADIIIJJL}"));
+	instance = new LimitSingleInstance(TEXT("Local\\{ASDSAD0-DCC6-49b5-9C61-ASDSADIIIJJL}"));
 
 	// Create local and global application mutexes so that installer knows when
 	// Launchy is running
@@ -209,27 +202,8 @@ bool PlatformWin::supportsAlphaBorder() const
 	return true;
 }
 
-
-bool PlatformWin::getComputers(QStringList& computers) const
+bool PlatformWin::getComputers(QList<QString>& computers) const
 {
-	// Get a list of domains. This should return nothing or fail when we're on a workgroup
-	QStringList domains;
-	if (EnumerateNetworkServers(domains, SV_TYPE_DOMAIN_ENUM))
-	{
-		foreach(QString domain, domains)
-		{
-			EnumerateNetworkServers(computers, SV_TYPE_WORKSTATION | SV_TYPE_SERVER, domain.utf16());
-		}
-
-		// If names have been retrieved from more than one domain, they'll need sorting
-		if (domains.length() > 1)
-		{
-			computers.sort();
-		}
-
-		return true;
-	}
-
 	return EnumerateNetworkServers(computers, SV_TYPE_WORKSTATION | SV_TYPE_SERVER);
 }
 
@@ -239,3 +213,5 @@ QApplication* createApplication(int& argc, char** argv)
 {
 	return new PlatformWin(argc, argv);
 }
+
+

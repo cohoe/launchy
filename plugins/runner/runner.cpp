@@ -22,8 +22,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "gui.h"
 
 
+RunnerPlugin* gRunnerInstance = NULL;
+
+
 void RunnerPlugin::init()
 {
+	if (gRunnerInstance == NULL)
+		gRunnerInstance = this;
+
 	QSettings* set = *settings;
 	cmds.clear();
 
@@ -167,7 +173,7 @@ void RunnerPlugin::doDialog(QWidget* parent, QWidget** newDlg)
 {
 	if (gui != NULL)
 		return;
-	gui.reset(new Gui(parent, *settings));
+	gui.reset(new Gui(parent));
 	*newDlg = gui.get();
 }
 

@@ -14,9 +14,9 @@ UnixIconProvider::UnixIconProvider() {
 	QStringList spl = line.split("=");
 	xdgDataDirs = spl[1].split(":");	
     }
-    // Fedora patch file launchy-xdg-icon-path.patch (original author unknown)
-    xdgDataDirs += "/usr/share/";
     xdgDataDirs += "/usr/share/icons/";
+    // Patch from Fedora (original author unknown)
+    xdgDataDirs += "/usr/share/";
 }
 
 

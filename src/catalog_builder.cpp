@@ -1,6 +1,6 @@
 /*
 Launchy: Application Launcher
-Copyright (C) 2007-2010  Josh Karlin, Simon Capewell
+Copyright (C) 2007-2009  Josh Karlin
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -27,44 +27,94 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 
 CatalogBuilder::CatalogBuilder(PluginHandler* plugs) :
-	plugins(plugs),
-	progress(CATALOG_PROGRESS_MAX)
+	plugins(plugs)
 {
-	catalog = new SlowCatalog();
+	catalog.reset((Catalog*)createCatalog());
+}
+
+
+CatalogBuilder::CatalogBuilder(PluginHandler* plugs, shared_ptr<Catalog> currentCatalog) :
+	plugins(plugs),
+	currentCatalog(currentCatalog)
+{
+	catalog.reset((Catalog*)createCatalog());
+}
+
+
+Catalog* CatalogBuilder::createCatalog()
+{
+	if (gSettings->value("GenOps/fastindexer",false).toBool())
+		return new FastCatalog();
+	return new SlowCatalog();
+}
+
+
+void CatalogBuilder::run()
+{
+	buildCatalog();
+	emit catalogFinished();
 }
 
 
 void CatalogBuilder::buildCatalog()
 {
-	progress = CATALOG_PROGRESS_MIN;
-	emit catalogIncrement(progress);
-	catalog->incrementTimestamp();
-	indexed.clear();
-
-	QList<Directory> memDirs = SettingsManager::readCatalogDirectories();
-	QHash<uint, PluginInfo> pluginsInfo = plugins->getPlugins();
-	totalItems = memDirs.count() + pluginsInfo.count();
-	currentItem = 0;
-
-	while (currentItem < memDirs.count())
+	QList<Directory> memDirs;
+	int size = gSettings->beginReadArray("directories");
+	for (int i = 0; i < size; ++i)
 	{
-		QString cur = platform->expandEnvironmentVars(memDirs[currentItem].name);
-		indexDirectory(cur, memDirs[currentItem].types, memDirs[currentItem].indexDirs, memDirs[currentItem].indexExe, memDirs[currentItem].depth);
-		progressStep(currentItem);
+		gSettings->setArrayIndex(i);
+		Directory tmp;
+		tmp.name = gSettings->value("name").toString();
+		tmp.types = gSettings->value("types").toStringList();
+		tmp.indexDirs = gSettings->value("indexDirs", false).toBool();
+		tmp.indexExe = gSettings->value("indexExes", false).toBool();
+		tmp.depth = gSettings->value("depth", 100).toInt();
+		memDirs.append(tmp);
+	}
+	gSettings->endArray();
+
+	if (memDirs.count() == 0)
+	{
+		memDirs = platform->getDefaultCatalogDirectories();
 	}
 
-	// Don't call the pluginhandler to request catalog because we need to track progress
-	plugins->getCatalogs(catalog, this);
+	QHash<uint, PluginInfo> pluginsInfo = plugins->getPlugins();
+	int totalItems = memDirs.count() + pluginsInfo.count();
+	int currentItem = 0;
 
-	catalog->purgeOldItems();
-	indexed.clear();
-	progress = CATALOG_PROGRESS_MAX;
-	emit catalogFinished();
+	for (; currentItem < memDirs.count(); ++currentItem)
+	{
+		emit(catalogIncrement(100.0f * (currentItem+1) / totalItems));
+		QString cur = platform->expandEnvironmentVars(memDirs[currentItem].name);
+		indexDirectory(cur, memDirs[currentItem].types, memDirs[currentItem].indexDirs, memDirs[currentItem].indexExe, memDirs[currentItem].depth);
+	}
+
+	foreach(PluginInfo info, pluginsInfo)
+	{
+		emit(catalogIncrement(100.0f * (currentItem+1) / totalItems));
+		if (info.loaded)
+		{
+			QList<CatItem> items;
+			info.obj->msg(MSG_GET_CATALOG, (void*)&items);
+			foreach(CatItem item, items)
+			{
+				if (currentCatalog != NULL)
+				{
+					item.usage = currentCatalog->getUsage(item.fullPath);
+				}
+				catalog->addItem(item);
+			}
+		}
+		++currentItem;
+	}
+
+	emit(catalogIncrement(0.0));
 }
 
 
 void CatalogBuilder::indexDirectory(const QString& directory, const QStringList& filters, bool fdirs, bool fbin, int depth)
 {
+
 	QString dir = QDir::toNativeSeparators(directory);
 	QDir qd(dir);
 	dir = qd.absolutePath();
@@ -83,6 +133,8 @@ void CatalogBuilder::indexDirectory(const QString& directory, const QStringList&
                                     // Special handling of app directories
                                     if (cur.endsWith(".app", Qt::CaseInsensitive)) {
                                         CatItem item(dir + "/" + cur);
+                                        if (currentCatalog != NULL)
+                                                item.usage = currentCatalog->getUsage(item.fullPath);
                                         platform->alterItem(&item);
                                         catalog->addItem(item);
                                     }
@@ -103,8 +155,10 @@ void CatalogBuilder::indexDirectory(const QString& directory, const QStringList&
 				bool isShortcut = dirs[i].endsWith(".lnk", Qt::CaseInsensitive);
 
 				CatItem item(dir + "/" + dirs[i], !isShortcut);
+				if (currentCatalog != NULL)
+					item.usage = currentCatalog->getUsage(item.fullPath);
 				catalog->addItem(item);
-				indexed.insert(dir + "/" + dirs[i]);
+				indexed[dir + "/" + dirs[i]] = true;
 			}
 		}
 	}
@@ -119,8 +173,10 @@ void CatalogBuilder::indexDirectory(const QString& directory, const QStringList&
 				if (!indexed.contains(dir + "/" + dirs[i]))
 				{
 					CatItem item(dir + "/" + dirs[i], true);
+					if (currentCatalog != NULL)
+						item.usage = currentCatalog->getUsage(item.fullPath);
 					catalog->addItem(item);
-					indexed.insert(dir + "/" + dirs[i]);
+					indexed[dir + "/" + dirs[i]] = true;
 				}
 			}
 		}
@@ -134,8 +190,10 @@ void CatalogBuilder::indexDirectory(const QString& directory, const QStringList&
 			if (!indexed.contains(dir + "/" + bins[i]))
 			{
 				CatItem item(dir + "/" + bins[i]);
+				if (currentCatalog != NULL)
+					item.usage = currentCatalog->getUsage(item.fullPath);
 				catalog->addItem(item);
-				indexed.insert(dir + "/" + bins[i]);
+				indexed[dir + "/" + bins[i]] = true;
 			}
 		}
 	}
@@ -149,7 +207,10 @@ void CatalogBuilder::indexDirectory(const QString& directory, const QStringList&
 	{
 		if (!indexed.contains(dir + "/" + files[i]))
 		{
+
 			CatItem item(dir + "/" + files[i]);
+			if (currentCatalog != NULL)
+				item.usage = currentCatalog->getUsage(item.fullPath);
 			platform->alterItem(&item);
 #ifdef Q_WS_X11
                         if(item.fullPath.endsWith(".desktop") && item.icon == "")
@@ -157,23 +218,7 @@ void CatalogBuilder::indexDirectory(const QString& directory, const QStringList&
 #endif
 			catalog->addItem(item);
 
-			indexed.insert(dir + "/" + files[i]);
+			indexed[dir + "/" + files[i]] = true;
 		}
 	}
-}
-
-
-bool CatalogBuilder::progressStep(int newStep)
-{
-	newStep = newStep;
-
-	++currentItem;
-	int newProgress = (int)(CATALOG_PROGRESS_MAX * (float)currentItem / totalItems);
-	if (newProgress != progress)
-	{
-		progress = newProgress;
-		emit catalogIncrement(progress);
-	}
-
-	return true;
 }

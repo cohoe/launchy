@@ -1,6 +1,6 @@
 /*
 Launchy: Application Launcher
-Copyright (C) 2007-2010  Josh Karlin, Simon Capewell
+Copyright (C) 2007-2009  Josh Karlin, Simon Capewell
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -21,64 +21,50 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "catalog.h"
 #include <QVector>
-#include <QMutex> // os x
 
-// These classes do not pertain to plugins
-
-// Catalog provides methods to search and manage the indexed items
+/** This class does not pertain to plugins */
 class Catalog
 {
 public:
-	Catalog() : timestamp(0) {}
+	Catalog() {}
 	virtual ~Catalog() {}
 	bool load(const QString& filename);
 	bool save(const QString& filename);
-	void incrementTimestamp() { ++timestamp; }
-	void searchCatalogs(const QString&, QList<CatItem>&);
-	void promoteRecentlyUsedItems(const QString& text, QList<CatItem> & list);
-
-	virtual int count() = 0;
-	virtual void clear() = 0;
 	virtual void addItem(const CatItem& item) = 0;
-	virtual void purgeOldItems() = 0;
-
-	virtual void incrementUsage(const CatItem& item) = 0;
-	virtual void demoteItem(const CatItem& item) = 0;
-
+	virtual int count() = 0;
+	virtual const CatItem& getItem(int) = 0;
 	static bool matches(CatItem* item, const QString& match);
 	static QString decorateText(const QString& text, const QString& match, bool outputRichText = false);
 
-protected:	
-	virtual const CatItem& getItem(int) = 0;
-	virtual QList<CatItem*> search(const QString&) = 0;
+	void searchCatalogs(const QString&, QList<CatItem>&);
+	virtual void incrementUsage(const CatItem& item) = 0;
+	virtual void demoteItem(const CatItem& item) = 0;
+	virtual int getUsage(const QString& path) = 0;
+	void promoteRecentlyUsedItems(const QString& text, QList<CatItem> & list);
 
-	int timestamp;
-	QMutex mutex;
+private:	
+	virtual QList<CatItem*> search(const QString&) = 0;
 };
 
 
-// CatalogItem is used internally to store additional 
-class CatalogItem : public CatItem
+/** This class does not pertain to plugins */
+// The fast catalog searches quickly but 
+// addition of items is slow and uses a lot of memory
+class FastCatalog : public Catalog
 {
 public:
-	CatalogItem() : 
-	  timestamp(0)
-	{
-	}
+	FastCatalog() : Catalog() {}
+	void addItem(const CatItem& item);
+	QList<CatItem*> search(const QString&);
+	int count() { return catList.count(); }
+	const CatItem& getItem(int i) { return catList[i]; }
+	void incrementUsage(const CatItem& item);
+	void demoteItem(const CatItem& item);
+	int getUsage(const QString& path);
 
-	CatalogItem(const CatItem& item, int time) :
-	  timestamp(time)
-	{
-		fullPath = item.fullPath;
-		shortName = item.shortName;
-		lowName = item.lowName;
-		icon = item.icon;
-		usage = item.usage;
-		data = item.data;
-		id = item.id;
-	}
-
-	int timestamp;
+private:
+	QVector<CatItem> catList;
+	QHash<QChar, QList<CatItem*> > catIndex;
 };
 
 
@@ -90,18 +76,14 @@ class SlowCatalog : public Catalog
 {
 public:
 	SlowCatalog() : Catalog() {}
-	virtual int count() { return catalogItems.count(); }
-	virtual void clear() { catalogItems.clear(); }
-	virtual void addItem(const CatItem& item);
-	virtual void purgeOldItems();
-
-	virtual void incrementUsage(const CatItem& item);
-	virtual void demoteItem(const CatItem& item);
-
-protected:
-	virtual const CatItem& getItem(int i) { return catalogItems[i]; }
-	virtual QList<CatItem*> search(const QString&);
+	void addItem(const CatItem& item);
+	QList<CatItem*> search(const QString&);
+	int count() { return catList.count(); }
+	const CatItem& getItem(int i) { return catList[i]; }
+	void incrementUsage(const CatItem& item);
+	void demoteItem(const CatItem& item);
+	int getUsage(const QString& path);
 
 private:
-	QVector<CatalogItem> catalogItems;
+	QVector<CatItem> catList;
 };

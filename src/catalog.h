@@ -122,15 +122,12 @@ public:
 		return *this;
 	}
 
-	bool operator==(const CatItem& other) const
-	{
-		return fullPath == other.fullPath && shortName == other.shortName;
+	bool operator==(const CatItem& other) const {
+		if (fullPath == other.fullPath)
+			return true;
+		return false;
 	}
 
-	bool operator!=(const CatItem& other) const
-	{
-		return !(*this == other);
-	}
 };
 
 

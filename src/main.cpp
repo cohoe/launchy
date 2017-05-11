@@ -34,7 +34,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifdef Q_WS_WIN
 void SetForegroundWindowEx(HWND hWnd)
 {
-	// Attach foreground window thread to our thread
+        // Attach foreground window thread to our thread
 	const DWORD foreGroundID = GetWindowThreadProcessId(GetForegroundWindow(), NULL);
 	const DWORD currentID = GetCurrentThreadId();
 
@@ -54,10 +54,10 @@ LaunchyWidget::LaunchyWidget(CommandFlags command) :
 	QWidget(NULL, Qt::FramelessWindowHint | Qt::Tool),
 #endif
 #ifdef Q_WS_X11
-	QWidget(NULL, Qt::FramelessWindowHint | Qt::Tool),
+        QWidget(NULL, Qt::FramelessWindowHint | Qt::Tool),
 #endif
 #ifdef Q_WS_MAC
-	QWidget(NULL, Qt::FramelessWindowHint),
+        QWidget(NULL, Qt::FramelessWindowHint),
 #endif
 
 	frameGraphic(NULL),
@@ -73,8 +73,8 @@ LaunchyWidget::LaunchyWidget(CommandFlags command) :
 	setWindowIcon(QIcon(":/resources/launchy128.png"));
 #endif
 #ifdef Q_WS_MAC
-	setWindowIcon(QIcon("../Resources/launchy_icon_mac.icns"));
-	//setAttribute(Qt::WA_MacAlwaysShowToolWindow);
+        setWindowIcon(QIcon("../Resources/launchy_icon_mac.icns"));
+        //setAttribute(Qt::WA_MacAlwaysShowToolWindow);
 #endif
 
 	setAttribute(Qt::WA_AlwaysShowToolTips);
@@ -95,7 +95,7 @@ LaunchyWidget::LaunchyWidget(CommandFlags command) :
 
 	alwaysShowLaunchy = false;
 
-	connect(&iconExtractor, SIGNAL(iconExtracted(int, QString, QIcon)), this, SLOT(iconExtracted(int, QString, QIcon)));
+	connect(&iconExtractor, SIGNAL(iconExtracted(int, QIcon)), this, SLOT(iconExtracted(int, QIcon)));
 
 	fader = new Fader(this);
 	connect(fader, SIGNAL(fadeLevel(double)), this, SLOT(setFadeLevel(double)));
@@ -118,7 +118,7 @@ LaunchyWidget::LaunchyWidget(CommandFlags command) :
 
 	input = new CharLineEdit(this);
 #ifdef Q_WS_MAC
-	QMacStyle::setFocusRectPolicy(input, QMacStyle::FocusDisabled);
+        QMacStyle::setFocusRectPolicy(input, QMacStyle::FocusDisabled);
 #endif
 	input->setObjectName("input");
 	connect(input, SIGNAL(keyPressed(QKeyEvent*)), this, SLOT(inputKeyPressEvent(QKeyEvent*)));
@@ -151,7 +151,7 @@ LaunchyWidget::LaunchyWidget(CommandFlags command) :
 	alternatives->setUniformItemSizes(true);
 	listDelegate = new IconDelegate(this);
 	defaultListDelegate = alternatives->itemDelegate();
-        setSuggestionListMode(gSettings->value("GenOps/condensedView", 2).toInt());
+	setSuggestionListMode(gSettings->value("GenOps/condensedView", 0).toInt());
 	altScroll = alternatives->verticalScrollBar();
 	altScroll->setObjectName("altScroll");
 	connect(alternatives, SIGNAL(currentRowChanged(int)), this, SLOT(alternativesRowChanged(int)));
@@ -186,28 +186,18 @@ LaunchyWidget::LaunchyWidget(CommandFlags command) :
 	}
 
 	// Set the timers
+	updateTimer = new QTimer(this);
 	dropTimer = new QTimer(this);
 	dropTimer->setSingleShot(true);
+	connect(updateTimer, SIGNAL(timeout()), this, SLOT(updateTimeout()));
 	connect(dropTimer, SIGNAL(timeout()), this, SLOT(dropTimeout()));
-
-	updateTimer = new QTimer(this);
-	connect(updateTimer, SIGNAL(timeout()), this, SLOT(buildCatalog()));
-	updateTimer->setSingleShot(true);
-	startUpdateTimer();
+	int time = gSettings->value("GenOps/updatetimer", 10).toInt();
+	if (time > 0)
+		updateTimer->start(time * 60000);
 
 	// Load the catalog
-	gBuilder = new CatalogBuilder(&plugins);
-	gBuilder->moveToThread(&builderThread);
-	connect(gBuilder, SIGNAL(catalogIncrement(int)), this, SLOT(catalogProgressUpdated(int)));
-	connect(gBuilder, SIGNAL(catalogFinished()), this, SLOT(catalogBuilt()));
-	builderThread.start(QThread::IdlePriority);
-	builderThread.setObjectName("CatalogBuilder");
-
-	catalog = gBuilder->getCatalog();
-	if (!catalog->load(settings.catalogFilename()))
-	{
-		command |= Rescan;
-	}
+	catalog.reset(CatalogBuilder::createCatalog());
+	catalog->load(settings.catalogFilename());
 
 	// Load the history
 	history.load(settings.historyFilename());
@@ -271,7 +261,7 @@ void LaunchyWidget::paintEvent(QPaintEvent* event)
 	styleOption.init(this);
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing);
-	style()->drawPrimitive(QStyle::PE_Widget, &styleOption, &painter, this);
+        style()->drawPrimitive(QStyle::PE_Widget, &styleOption, &painter, this);
 
 	// Now draw the standard frame.png graphic if there is one
 	if (frameGraphic)
@@ -344,105 +334,96 @@ void LaunchyWidget::showTrayIcon()
 }
 
 
-// Repopulate the alternatives list with the current search results
-// and set its size and position accordingly.
-void LaunchyWidget::updateAlternatives(bool resetSelection)
+void LaunchyWidget::showAlternatives(bool show, bool resetSelection)
 {
-        int mode = gSettings->value("GenOps/condensedView", 2).toInt();
-	int i = 0;
-	for (; i < searchResults.size(); ++i)
-	{
-		qDebug() << "Alternative" << i << ":" << searchResults[i].fullPath;
-		QString fullPath = QDir::toNativeSeparators(searchResults[i].fullPath);
-#ifdef _DEBUG
-		fullPath += QString(" (%1 launches)").arg(searchResults[i].usage);
-#endif			
-		QListWidgetItem* item;
-		if (i < alternatives->count())
-		{
-			item = alternatives->item(i);
-		}
-		else
-		{
-			item = new QListWidgetItem(fullPath, alternatives);
-		}
-		if (item->data(mode == 1 ? ROLE_SHORT : ROLE_FULL) != fullPath)
-		{
-			// condensedTempIcon is a blank icon or null
-			item->setData(ROLE_ICON, *condensedTempIcon);
-		}
-		item->setData(mode == 1 ? ROLE_FULL : ROLE_SHORT, searchResults[i].shortName);
-		item->setData(mode == 1 ? ROLE_SHORT : ROLE_FULL, fullPath);
-		if (i >= alternatives->count())
-			alternatives->addItem(item);
-	}
-
-	while (alternatives->count() > i)
-	{
-		delete alternatives->takeItem(i);
-	}
-
-	if (resetSelection)
-	{
-		alternatives->setCurrentRow(0);
-	}
-	iconExtractor.processIcons(searchResults);
-
-	// Now resize and reposition the list
-	int numViewable = gSettings->value("GenOps/numviewable", "4").toInt();
-	int min = alternatives->count() < numViewable ? alternatives->count() : numViewable;
-
-	// The stylesheet doesn't load immediately, so we cache the placement rectangle here
-	if (alternativesRect.isNull())
-		alternativesRect = alternatives->geometry();
-	QRect rect = alternativesRect;
-	rect.setHeight(min * alternatives->sizeHintForRow(0));
-	rect.translate(pos());
-
-	// Is there room for the dropdown box?
-	if (rect.y() + rect.height() > qApp->desktop()->height())
-	{
-		// Only move it if there's more space above
-		// In both cases, ensure it doesn't spill off the screen
-		if (pos().y() + input->pos().y() > qApp->desktop()->height() / 2)
-		{
-			rect.moveTop(pos().y() + input->pos().y() - rect.height());
-			if (rect.top() < 0)
-				rect.setTop(0);
-		}
-		else
-		{
-			rect.setBottom(qApp->desktop()->height());
-		}
-	}
-
-	alternatives->setGeometry(rect);
-}
-
-
-void LaunchyWidget::showAlternatives()
-{
-	// Ensure that any pending shows of the alternatives list are cancelled
-	// so that we only update the list once.
 	dropTimer->stop();
 
-	alternatives->show();
-	alternatives->setFocus();
-	qApp->syncX();
-}
+	// If main launchy window is not visible, do nothing
+	if (!isVisible())
+		return;
 
+	if (show)
+	{
+		if (searchResults.size() < 1)
+			return;
 
-void LaunchyWidget::hideAlternatives()
-{
-	// Ensure that any pending shows of the alternatives list are cancelled
-	// so that the list isn't erroneously shown shortly after being dismissed.
-	dropTimer->stop();
+		int mode = gSettings->value("GenOps/condensedView", 0).toInt();
+		int i = 0;
+		for (; i < searchResults.size(); ++i)
+		{
+			qDebug() << "Alternative" << i << ":" << searchResults[i].fullPath;
+			QString fullPath = QDir::toNativeSeparators(searchResults[i].fullPath);
+			
+			QListWidgetItem* item;
+			if (i < alternatives->count())
+			{
+				item = alternatives->item(i);
+			}
+			else
+			{
+				item = new QListWidgetItem(fullPath, alternatives);
+			}
+			if (item->data(mode == 1 ? ROLE_SHORT : ROLE_FULL) != fullPath)
+			{
+				// condensedTempIcon is a blank icon or null
+				item->setData(ROLE_ICON, *condensedTempIcon);
+			}
+			item->setData(mode == 1 ? ROLE_FULL : ROLE_SHORT, searchResults[i].shortName);
+			item->setData(mode == 1 ? ROLE_SHORT : ROLE_FULL, fullPath);
+			if (i >= alternatives->count())
+				alternatives->addItem(item);
+		}
+		while (alternatives->count() > i)
+		{
+			delete alternatives->takeItem(i);
+		}
 
-	// clear the selection before hiding to prevent flicker
-	alternatives->setCurrentRow(-1);
-	alternatives->repaint();
-	alternatives->hide();
-	iconExtractor.stop();
+		if (resetSelection)
+		{
+			alternatives->setCurrentRow(0);
+		}
+		iconExtractor.processIcons(searchResults);
+
+		int numViewable = gSettings->value("GenOps/numviewable", "4").toInt();
+		int min = alternatives->count() < numViewable ? alternatives->count() : numViewable;
+
+		// The stylesheet doesn't load immediately, so we cache the rect here
+		if (alternativesRect.isNull())
+			alternativesRect = alternatives->geometry();
+		QRect rect = alternativesRect;
+		rect.setHeight(min * alternatives->sizeHintForRow(0));
+		rect.translate(pos());
+
+		// Is there room for the dropdown box?
+		if (rect.y() + rect.height() > qApp->desktop()->height())
+		{
+			// Only move it if there's more space above
+			// In both cases, ensure it doesn't spill off the screen
+			if (pos().y() + input->pos().y() > qApp->desktop()->height() / 2)
+			{
+				rect.moveTop(pos().y() + input->pos().y() - rect.height());
+				if (rect.top() < 0)
+					rect.setTop(0);
+			}
+			else
+			{
+				rect.setBottom(qApp->desktop()->height());
+			}
+		}
+
+		alternatives->setGeometry(rect);
+		alternatives->show();
+		alternatives->setFocus();
+		qApp->syncX();
+	}
+	else
+	{
+		// clear the selection before hiding to prevent flicker
+		alternatives->setCurrentRow(-1);
+		alternatives->repaint();
+		alternatives->hide();
+		iconExtractor.stop();
+	}
 }
 
 
@@ -499,9 +480,8 @@ void LaunchyWidget::launchItem(CatItem& item)
 
 void LaunchyWidget::focusInEvent(QFocusEvent* event)
 {
-    if (event->gotFocus() && fader->isFading())
-		fader->fadeIn(false);        
-
+	if (event->gotFocus() && fader->isFading())
+		fader->fadeIn(false);
 
 	QWidget::focusInEvent(event);
 }
@@ -509,10 +489,10 @@ void LaunchyWidget::focusInEvent(QFocusEvent* event)
 
 void LaunchyWidget::focusOutEvent(QFocusEvent* event)
 {
-        if (event->reason() == Qt::ActiveWindowFocusReason)
+	if (event->reason() == Qt::ActiveWindowFocusReason)
 	{
 		if (gSettings->value("GenOps/hideiflostfocus", false).toBool() &&
-                        !isActiveWindow() && !alternatives->isActiveWindow() && !optionsOpen && !fader->isFading())
+			!isActiveWindow() && !alternatives->isActiveWindow() && !optionsOpen)
 		{
 			hideLaunchy();
 		}
@@ -537,34 +517,30 @@ void LaunchyWidget::alternativesRowChanged(int index)
 			if (item.id == HASH_HISTORY && historyIndex < searchResults.count())
 			{
 				inputData = history.getItem(historyIndex);
+				gSearchText = inputData.last().getText();
 				input->selectAll();
 				input->insert(inputData.toString());
 				input->selectAll();
-				output->setText(inputData[0].getTopResult().shortName);
-				// No need to fetch the icon again, just grab it from the alternatives row
-				outputIcon->setPixmap(alternatives->item(index)->icon().pixmap(outputIcon->size()));
-				outputItem = item;
-				gSearchText = inputData.toString();
+				output->setText(Catalog::decorateText(item.shortName, gSearchText, true));
+				iconExtractor.processIcon(item);
 			}
 		}
 		else if (inputData.count() > 0 && 
 			(inputData.last().hasLabel(LABEL_AUTOSUGGEST) || inputData.last().hasText() == 0))
 		{
 			qDebug() << "Autosuggest" << item.shortName;
+			gSearchText = item.shortName;
 
 			inputData.last().setText(item.shortName);
 			inputData.last().setLabel(LABEL_AUTOSUGGEST);
 
 			QString root = inputData.toString(true);
 			input->selectAll();
-			input->insert(root + item.shortName);
-			input->setSelection(root.length(), item.shortName.length());
+			input->insert(root + gSearchText);
+			input->setSelection(root.length(), gSearchText.length());
 
-			output->setText(item.shortName);
-			// No need to fetch the icon again, just grab it from the alternatives row
-			outputIcon->setPixmap(alternatives->item(index)->icon().pixmap(outputIcon->size()));
-			outputItem = item;
-			gSearchText = "";
+			output->setText(Catalog::decorateText(gSearchText, gSearchText, true));
+			iconExtractor.processIcon(item);
 		}
 	}
 }
@@ -580,6 +556,9 @@ void LaunchyWidget::inputKeyPressEvent(QKeyEvent* event)
 	{
 		event->ignore();
 	}
+
+	if (input->text().length() == 0)
+		showAlternatives(false);
 }
 
 
@@ -587,9 +566,9 @@ void LaunchyWidget::alternativesKeyPressEvent(QKeyEvent* event)
 {
 	if (event->key() == Qt::Key_Escape)
 	{
-		hideAlternatives();
-		input->setFocus();
+		showAlternatives(false);
 		event->ignore();
+                this->input->setFocus();
 	}
 	else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Tab)
 	{
@@ -636,8 +615,7 @@ void LaunchyWidget::alternativesKeyPressEvent(QKeyEvent* event)
 				// Delete selected history entry from the alternatives list
 				history.removeAt(row);
 				input->clear();
-				searchOnInput();
-				updateAlternatives(false);
+				processKey();
 				alternativesRowChanged(alternatives->currentRow());
 			}
 			else
@@ -647,6 +625,7 @@ void LaunchyWidget::alternativesKeyPressEvent(QKeyEvent* event)
 				searchOnInput();
 				updateOutputWidgets(false);
 			}
+			showAlternatives(true, false);
 		}
 	}
 	else if (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right ||
@@ -659,7 +638,7 @@ void LaunchyWidget::alternativesKeyPressEvent(QKeyEvent* event)
 		input->keyPressEvent(event);
 		keyPressEvent(event);
 	}
-	alternatives->setFocus();
+        alternatives->setFocus();
 }
 
 
@@ -668,7 +647,7 @@ void LaunchyWidget::keyPressEvent(QKeyEvent* event)
 	if (event->key() == Qt::Key_Escape)
 	{
 		if (alternatives->isVisible())
-			hideAlternatives();
+			showAlternatives(false);
 		else
 			hideLaunchy();
 	}
@@ -704,11 +683,14 @@ void LaunchyWidget::keyPressEvent(QKeyEvent* event)
 			searchOnInput();
 			if (searchResults.count() > 0)
 			{
-				updateAlternatives();
 				showAlternatives();
+				alternatives->activateWindow();
+				if (alternatives->count() > 0)
+					alternatives->setCurrentRow(0);
 			}
 		}
 	}
+
 	else if ((event->key() == Qt::Key_Tab || event->key() == Qt::Key_Backspace) && event->modifiers() == Qt::ShiftModifier)
 	{
 		doBackTab();
@@ -719,19 +701,14 @@ void LaunchyWidget::keyPressEvent(QKeyEvent* event)
 		doTab();
 		processKey();
 	}
+	/*
 	else if (event->key() == Qt::Key_Slash || event->key() == Qt::Key_Backslash)
 	{
-		if (inputData.count() > 0 && inputData.last().hasLabel(LABEL_FILE) &&
-			searchResults.count() > 0 && searchResults[0].id == HASH_LAUNCHYFILE)
+		if (inputData.count() > 0 && inputData.last().hasLabel(LABEL_FILE))
 			doTab();
 		processKey();
 	}
-	else if (event->key()== Qt::Key_Insert && event->modifiers() == Qt::ShiftModifier)
-	{
-		// ensure pasting text with Shift+Insert also parses input
-		// longer term parsing should be done using the TextChanged event
-		processKey();
-	}
+	*/
 	else if (event->text().length() > 0)
 	{
 		// process any other key with character output
@@ -748,35 +725,13 @@ void LaunchyWidget::doBackTab()
 	int index = text.lastIndexOf(input->separatorText());
 	if (index >= 0)
 	{
-		text.truncate(index+3);
-		input->selectAll();
-		input->insert(text);
-    }
-	
-    else if (text.lastIndexOf(QDir::separator()) >= 0) {
-        text.truncate(text.lastIndexOf(QDir::separator())+1);
-        input->selectAll();
-        input->insert(text);
-    }
-	else if (text.lastIndexOf(QChar(' ')) >= 0) {
-		text.truncate(text.lastIndexOf(QChar(' '))+1);
-		input->selectAll();
-		input->insert(text);
-	}
-	
-	else if (text.lastIndexOf(QDir::separator()) >= 0) {
-		text.truncate(text.lastIndexOf(QDir::separator())+1);
-		input->selectAll();
-		input->insert(text);
-	}
-	else if (text.lastIndexOf(QChar(' ')) >= 0) {
-		text.truncate(text.lastIndexOf(QChar(' '))+1);
+		text.truncate(index);
 		input->selectAll();
 		input->insert(text);
 	}
 	else
 	{
-        input->clear();
+		input->clear();
 	}
 }
 
@@ -788,8 +743,54 @@ void LaunchyWidget::doTab()
 		// If it's an incomplete file or directory, complete it
 		QFileInfo info(searchResults[0].fullPath);
 
-		if (inputData.last().hasLabel(LABEL_FILE) || info.isDir())
+		if ((inputData.last().hasLabel(LABEL_FILE) || info.isDir())
+			)//	&& input->text().compare(QDir::toNativeSeparators(searchResults[0].fullPath), Qt::CaseInsensitive) != 0)
 		{
+
+			// If multiple paths exist, select the longest intersection (like the bash shell)
+			if (!alternatives->isActiveWindow())
+			{ 
+				QStringList paths;
+				int minLength = -1;
+				foreach(const CatItem& item, searchResults) {
+					if (item.id == HASH_LAUNCHYFILE) {
+						QString p = item.fullPath;
+						paths += p;
+						if (minLength == -1 || p.length() < minLength)
+							minLength = p.length();
+						qDebug() << p;
+					}
+				}
+				qDebug() << "";
+
+				if (paths.size() > 1) {
+					// Find the longest prefix common to all of the paths
+					QChar curChar;
+					QString longestPrefix = "";
+					for(int i = 0; i < minLength; i++) {
+						curChar = paths[0][i];
+						bool stop = false;
+						foreach(QString path, paths) {
+#ifdef Q_WS_WIN
+							if (path[i].toLower() != curChar.toLower()) {
+#else
+							if (path[i] != curChar) {
+#endif
+								stop = true;
+								break;
+							}
+						}
+						if (stop) break;
+						longestPrefix += curChar;
+					}
+
+					input->selectAll();
+					input->insert(inputData.toString(true) + longestPrefix);
+					return;
+				}
+			}
+
+
 			QString path;
 			if (info.isSymLink())
 				path = info.symLinkTarget();
@@ -808,6 +809,9 @@ void LaunchyWidget::doTab()
 			inputData.last().setText(searchResults[0].shortName);
 			input->selectAll();
 			input->insert(inputData.toString() + input->separatorText());
+
+			QRect rect = input->rect();
+			repaint(rect);
 		}
 	}
 }
@@ -815,25 +819,25 @@ void LaunchyWidget::doTab()
 
 void LaunchyWidget::doEnter()
 {
-	hideAlternatives();
+	showAlternatives(false);
 
 	if ((inputData.count() > 0 && searchResults.count() > 0) || inputData.count() > 1)
 	{
 		CatItem& item = inputData[0].getTopResult();
 		qDebug() << "Launching" << item.shortName << ":" << item.fullPath;
 		launchItem(item);
-		hideLaunchy();
 	}
 	else
 	{
 		qDebug("Nothing to launch");
 	}
+	hideLaunchy();
 }
 
 
 void LaunchyWidget::inputMethodEvent(QInputMethodEvent* event)
 {
-	event = event; // Warning removal
+        event = event; // Warning removal
 	processKey();
 }
 
@@ -843,17 +847,6 @@ void LaunchyWidget::processKey()
 	inputData.parse(input->text());
 	searchOnInput();
 	updateOutputWidgets();
-
-	// If there is no input text, ensure that the alternatives list is hidden
-	// otherwise, show it after the user defined delay if it's not currently visible
-	if (input->text().length() == 0)
-	{
-		hideAlternatives();
-	}
-	else if (!alternatives->isVisible())
-	{
-		startDropTimer();
-	}
 }
 
 
@@ -863,44 +856,36 @@ void LaunchyWidget::searchOnInput()
 		return;
 
 	QString searchText = inputData.count() > 0 ? inputData.last().getText() : "";
-	QString searchTextLower = searchText.toLower();
-	gSearchText = searchTextLower;
+	gSearchText = searchText;
 	searchResults.clear();
 
+	// Add history items on their own and don't sort them so they remain in most recently used order
 	if ((inputData.count() > 0 && inputData.first().hasLabel(LABEL_HISTORY)) || input->text().length() == 0)
 	{
-		// Add history items exclusively and unsorted so they remain in most recently used order
 		qDebug() << "Searching history for" << searchText;
-		history.search(searchTextLower, searchResults);
+		history.search(searchText, searchResults);
 	}
 	else
 	{
-		// Search the catalog for matching items
 		if (inputData.count() == 1)
 		{
 			qDebug() << "Searching catalog for" << searchText;
-			catalog->searchCatalogs(searchTextLower, searchResults);
+			catalog->searchCatalogs(gSearchText, searchResults);
 		}
 
 		if (searchResults.count() != 0)
 			inputData.last().setTopResult(searchResults[0]);
 
-		// Give plugins a chance to add their own dynamic matches
 		plugins.getLabels(&inputData);
 		plugins.getResults(&inputData, &searchResults);
-
-		// Sort the results by match and usage, then promote any that match previously
-		// executed commands
 		qSort(searchResults.begin(), searchResults.end(), CatLessNoPtr);
-		catalog->promoteRecentlyUsedItems(searchTextLower, searchResults);
 
-		// Finally, if the search text looks like a file or directory name,
-		// add any file or directory matches
+		// Is it a file?
 		if (searchText.contains(QDir::separator()) || searchText.startsWith("~") ||
 			(searchText.size() == 2 && searchText[0].isLetter() && searchText[1] == ':'))
-		{
 			FileSearch::search(searchText, searchResults, inputData);
-		}
+
+		catalog->promoteRecentlyUsedItems(gSearchText, searchResults);
 	}
 }
 
@@ -908,43 +893,33 @@ void LaunchyWidget::searchOnInput()
 // If there are current results, update the output text and icon
 void LaunchyWidget::updateOutputWidgets(bool resetAlternativesSelection)
 {
-	if (searchResults.count() > 0 && (inputData.count() > 1 || input->text().length() > 0))
+	if (searchResults.count() > 0 && (inputData.count() > 1 || gSearchText.length() > 0))
 	{
 		qDebug() << "Setting output text to" << searchResults[0].shortName;
+		output->setText(Catalog::decorateText(searchResults[0].shortName, gSearchText, true));
+        iconExtractor.processIcon(searchResults[0]);
 
-		QString outputText = Catalog::decorateText(searchResults[0].shortName, gSearchText, true);
-#ifdef _DEBUG
-		outputText += QString(" (%1 launches)").arg(searchResults[0].usage);
-#endif
-		output->setText(outputText);
-		if (outputItem != searchResults[0])
-		{
-			outputItem = searchResults[0];
-			outputIcon->clear();
-			iconExtractor.processIcon(searchResults[0]);
-		}
-
-		if (outputItem.id != HASH_HISTORY)
+//outputIcon->setPixmap(platform->icon(searchResults[0].fullPath).pixmap((outputIcon->size())));
+		if (searchResults[0].id != HASH_HISTORY)
 		{
 			// Did the plugin take control of the input?
 			if (inputData.last().getID() != 0)
-				outputItem.id = inputData.last().getID();
+				searchResults[0].id = inputData.last().getID();
 			inputData.last().setTopResult(searchResults[0]);
 		}
 
-		// Only update the alternatives list if it is visible
-		if (alternatives->isVisible())
-		{
-			updateAlternatives(resetAlternativesSelection);
-		}
+		// If the alternatives are already showing, update them
+		if (alternatives->isVisible()) 
+			showAlternatives(true, resetAlternativesSelection);
+		// Don't schedule a drop down if there's no input text
+		else if (input->text().length() > 0)
+			startDropTimer();
 	}
 	else
 	{
-		// No results to show, clear the output UI and hide the alternatives list
 		output->clear();
 		outputIcon->clear();
-		outputItem = CatItem();
-		hideAlternatives();
+		showAlternatives(false);
 	}
 }
 
@@ -955,66 +930,47 @@ void LaunchyWidget::startDropTimer()
 	if (delay > 0)
 		dropTimer->start(delay);
 	else
-		dropTimeout();
+		showAlternatives(false);
 }
 
 
-void LaunchyWidget::dropTimeout()
-{
-	// Don't do anything if Launchy has been hidden since the timer was started
-	if (isVisible() && searchResults.count() > 0)
-	{
-		updateAlternatives();
-		showAlternatives();
-	}
-}
-
-
-void LaunchyWidget::iconExtracted(int itemIndex, QString path, QIcon icon)
+void LaunchyWidget::iconExtracted(int itemIndex, QIcon icon)
 {
 	if (itemIndex == -1)
 	{
-		// An index of -1 means update the output icon, check that it is also
-		// the same item as was originally requested
-		if (path == outputItem.fullPath)
-		{
-			outputIcon->setPixmap(icon.pixmap(outputIcon->size()));
-		}
+		// An index of -1 means update the output icon
+		outputIcon->setPixmap(icon.pixmap(outputIcon->size()));
 	}
 	else if (itemIndex < alternatives->count())
 	{
-		// >=0 is an item in the alternatives list
-		if (itemIndex < searchResults.count() && path == searchResults[itemIndex].fullPath)
-		{
-			QListWidgetItem* listItem = alternatives->item(itemIndex);
-			listItem->setIcon(icon);
-			listItem->setData(ROLE_ICON, icon);
+		// >=0 is an item in the list
+		QListWidgetItem* listItem = alternatives->item(itemIndex);
+		listItem->setIcon(icon);
+		listItem->setData(ROLE_ICON, icon);
 
-			QRect rect = alternatives->visualItemRect(listItem);
-			repaint(rect);
-		}
+		QRect rect = alternatives->visualItemRect(listItem);
+		repaint(rect);
 	}
 }
 
 
-void LaunchyWidget::catalogProgressUpdated(int value)
+void LaunchyWidget::catalogProgressUpdated(float /*val*/)
 {
-	if (value == 0)
-	{
-		workingAnimation->Start();
-	}
 }
 
 
 void LaunchyWidget::catalogBuilt()
 {
-	// Save settings and updated catalog, stop the "working" animation 
-	saveSettings();
-	workingAnimation->Stop();
+	catalog = gBuilder->getCatalog();
 
-	// Now do a search using the updated catalog
-	searchOnInput();
-	updateOutputWidgets();
+	gBuilder->wait();
+	gBuilder.reset();
+
+	workingAnimation->Stop();
+	// Do a search here of the current input text
+	processKey();
+
+	catalog->save(settings.catalogFilename());
 }
 
 
@@ -1115,23 +1071,25 @@ void LaunchyWidget::loadPosition(QPoint pt)
 }
 
 
-void LaunchyWidget::saveSettings()
+void LaunchyWidget::updateTimeout()
 {
-	qDebug() << "Save settings";
+	// Save the settings periodically
 	savePosition();
 	gSettings->sync();
-	catalog->save(settings.catalogFilename());
-	history.save(settings.historyFilename());
+
+	buildCatalog();
+	
+	int time = gSettings->value("GenOps/updatetimer", 10).toInt();
+	updateTimer->stop();
+	if (time != 0)
+		updateTimer->start(time * 60000);
 }
 
 
-void LaunchyWidget::startUpdateTimer()
+void LaunchyWidget::dropTimeout()
 {
-	int time = gSettings->value("GenOps/updatetimer", 10).toInt();
-	if (time != 0)
-		updateTimer->start(time * 60000);
-	else
-		updateTimer->stop();
+	if (searchResults.count() > 0)
+		showAlternatives();
 }
 
 
@@ -1155,9 +1113,12 @@ void LaunchyWidget::onHotkey()
 
 void LaunchyWidget::closeEvent(QCloseEvent* event)
 {
-	builderThread.exit();
 	fader->stop();
-	saveSettings();
+	savePosition();
+	gSettings->sync();
+
+	catalog->save(settings.catalogFilename());
+	history.save(settings.historyFilename());
 
 	event->accept();
 	qApp->quit();
@@ -1206,7 +1167,7 @@ void LaunchyWidget::reloadSkin()
 
 void LaunchyWidget::applySkin(const QString& name)
 {
-	currentSkin = name;
+    currentSkin = name;
 
 	if (listDelegate == NULL)
 		return;
@@ -1248,11 +1209,6 @@ void LaunchyWidget::applySkin(const QString& name)
 			return;
 		QString styleSheet = QLatin1String(file.readAll());
 		file.close();
-
-		// Remove incorrect selectors from the stylesheet
-		styleSheet.replace("QLineEdit#", "#");
-		styleSheet.replace("QPushButton#", "#");
-		styleSheet.replace("QListWidget#", "#");
 
 		// This is causing the ::destroyed connect errors
 		qApp->setStyleSheet(styleSheet);
@@ -1378,7 +1334,7 @@ void LaunchyWidget::applySkin(const QString& name)
 		if (frameGraphic)
 		{
 			resize(frameGraphic->size());
-		}
+                }
 	}
 
 	int maxIconSize = outputIcon->width();
@@ -1397,7 +1353,7 @@ void LaunchyWidget::mousePressEvent(QMouseEvent *e)
 			dragStartPoint = e->pos();
 		}
 	}
-	hideAlternatives();
+	showAlternatives(false);
 	activateWindow();
 	input->setFocus();
 }
@@ -1409,7 +1365,7 @@ void LaunchyWidget::mouseMoveEvent(QMouseEvent *e)
 	{
 		QPoint p = e->globalPos() - dragStartPoint;
 		move(p);
-		hideAlternatives();
+		showAlternatives(false);
 		input->setFocus();
 	}
 }
@@ -1417,9 +1373,9 @@ void LaunchyWidget::mouseMoveEvent(QMouseEvent *e)
 
 void LaunchyWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-	event = event; // Warning removal
+        event = event; // Warning removal
 	dragging = false;
-	hideAlternatives();
+	showAlternatives(false);
 	input->setFocus();
 }
 
@@ -1428,8 +1384,8 @@ void LaunchyWidget::contextMenuEvent(QContextMenuEvent* event)
 {
 	QMenu menu(this);
 	menu.addAction(actRebuild);
-	menu.addAction(actReloadSkin);
-	menu.addAction(actOptions);
+    menu.addAction(actReloadSkin);
+	menu.addAction(actOptions);        
 	menu.addSeparator();
 	menu.addAction(actExit);
 	menuOpen = true;
@@ -1442,27 +1398,30 @@ void LaunchyWidget::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
 {
 	switch (reason)
 	{
-		case QSystemTrayIcon::Trigger:
+        case QSystemTrayIcon::Trigger:
 		showLaunchy();
-			break;
-		case QSystemTrayIcon::Unknown:
-		case QSystemTrayIcon::Context:
-		case QSystemTrayIcon::DoubleClick:
-		case QSystemTrayIcon::MiddleClick:
-			break;
+		break;
+        case QSystemTrayIcon::Unknown:
+        case QSystemTrayIcon::Context:
+        case QSystemTrayIcon::DoubleClick:
+        case QSystemTrayIcon::MiddleClick:
+                break;
 	}
 }
 
 
 void LaunchyWidget::buildCatalog()
 {
-	updateTimer->stop();
-	saveSettings();
-
-	// Use the catalog builder to refresh the catalog in a worker thread
-	QMetaObject::invokeMethod(gBuilder, "buildCatalog", Qt::AutoConnection);
-
-	startUpdateTimer();
+	// Perform the database update
+	if (gBuilder == NULL)
+	{
+		gBuilder.reset(new CatalogBuilder(&plugins, catalog));
+		connect(gBuilder.get(), SIGNAL(catalogFinished()), this, SLOT(catalogBuilt()));
+		connect(gBuilder.get(), SIGNAL(catalogIncrement(float)), this, SLOT(catalogProgressUpdated(float)));
+		workingAnimation->Start();
+		gBuilder->start(QThread::IdlePriority);
+		//gBuilder->run();
+	}
 }
 
 
@@ -1470,7 +1429,8 @@ void LaunchyWidget::showOptionsDialog()
 {
 	if (!optionsOpen)
 	{
-		hideAlternatives();
+		dropTimer->stop();
+		showAlternatives(false);
 		optionsOpen = true;
 		OptionsDialog options(this);
 		options.setObjectName("options");
@@ -1518,37 +1478,37 @@ void LaunchyWidget::setFadeLevel(double level)
 	}
 	else
 	{
-            if (!isVisible()) {
-                show();
-                activateWindow();
-                raise();
-                }
+		if (!isVisible())
+			show();
 	}
 
+        // Make sure we grab focus once we've faded in
+        if (level >= 1.0) {
+            activateWindow();
+            raise();
+        }
 }
 
 
 void LaunchyWidget::showLaunchy(bool noFade)
 {
 	shouldDonate();
-	hideAlternatives();
+	showAlternatives(false);
 
+#ifdef Q_WS_WIN
+	// There's a problem with alpha layered windows under Vista after resuming
+	// from sleep. The alpha image may need to be reapplied.
+#endif
 	loadPosition(pos());
 
 	fader->fadeIn(noFade || alwaysShowLaunchy);
 
+
+        //qApp->syncX();
 #ifdef Q_WS_WIN
 	// need to use this method in Windows to ensure that keyboard focus is set when 
 	// being activated via a hook or message from another instance of Launchy
 	SetForegroundWindowEx(winId());
-#elif defined(Q_WS_X11)
-	/* Fix for bug 2994680: Not sure why this is necessary, perhaps someone with more
-	   Qt experience can tell, but doing these two calls will force the window to actually
-	   get keyboard focus when it is activated. It seems from the bug reports that this
-	   only affects Linux (and I could only test it on my Linux system - running KDE), so
-	   it leads me to believe that it is due to an issue in the Qt implementation on Linux. */
-	grabKeyboard();
-	releaseKeyboard();
 #endif
 	input->raise();
 	input->activateWindow();
@@ -1568,13 +1528,14 @@ void LaunchyWidget::showLaunchy()
 
 void LaunchyWidget::hideLaunchy(bool noFade)
 {
-        if (!isVisible() || isHidden())
-                return;
+	if (!isVisible())
+		return;
 
 	savePosition();
-	hideAlternatives();
+	showAlternatives(false);
 	if (alwaysShowLaunchy)
 		return;
+
 
 	if (isVisible())
 	{
@@ -1615,7 +1576,7 @@ int LaunchyWidget::getHotkey() const
 		int meta = Qt::ControlModifier;
 #endif
 #ifdef Q_WS_MAC
-		int meta = Qt::MetaModifier;
+                int meta = Qt::MetaModifier;
 #endif
 		hotkey = gSettings->value("GenOps/hotkeyModifier", meta).toInt() |
 				 gSettings->value("GenOps/hotkeyAction", Qt::Key_Space).toInt();
@@ -1634,9 +1595,9 @@ void LaunchyWidget::createActions()
 	connect(actRebuild, SIGNAL(triggered()), this, SLOT(buildCatalog()));
 	addAction(actRebuild);
 
-	actReloadSkin = new QAction(tr("Reload skin"), this);
+    actReloadSkin = new QAction(tr("Reload skin"), this);
 	actReloadSkin->setShortcut(QKeySequence(Qt::Key_F5 | Qt::SHIFT));
-	connect(actReloadSkin, SIGNAL(triggered()), this, SLOT(reloadSkin()));
+    connect(actReloadSkin, SIGNAL(triggered()), this, SLOT(reloadSkin()));
 	addAction(actReloadSkin);
 
 	actOptions = new QAction(tr("Options"), this);
@@ -1727,13 +1688,6 @@ int main(int argc, char *argv[])
 			{
 				qInstallMsgHandler(fileLogMsgHandler);
 			}
-			else if (arg.compare("profile", Qt::CaseInsensitive) == 0)
-			{
-				if (++i < args.length())
-				{
-					settings.setProfileName(args[i]);
-				}
-			}
 		}
 	}
 
@@ -1754,12 +1708,17 @@ int main(int argc, char *argv[])
 	qApp->setStyleSheet("file:///:/resources/basicskin.qss");
 
 #ifdef Q_WS_WIN
-	LaunchyWidget* widget = createLaunchyWidget(command);
+        LaunchyWidget* widget = createLaunchyWidget(command);
 #else
-	LaunchyWidget* widget = new LaunchyWidget(command);
+        LaunchyWidget* widget = new LaunchyWidget(command);
 #endif
 
 	qApp->exec();
+
+	if (gBuilder != NULL)
+	{
+		gBuilder->wait();
+	}
 
 	delete widget;
 	widget = NULL;

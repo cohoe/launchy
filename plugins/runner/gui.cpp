@@ -25,12 +25,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define ROW_PADDING 6
 
 
-Gui::Gui(QWidget* parent, QSettings* settings) 
-	: QWidget(parent), settings(settings)
+Gui::Gui(QWidget* parent) 
+	: QWidget(parent)
 {
 	setupUi(this);
-	if (settings == NULL)
-		return;
+	QSettings* settings = *gRunnerInstance->settings;
+	if (settings == NULL) return;
 
 	// Stretch the centre column of the table
 	table->horizontalHeader()->setResizeMode(1, QHeaderView::Stretch); //  column 1
@@ -59,8 +59,8 @@ Gui::Gui(QWidget* parent, QSettings* settings)
 
 void Gui::writeOptions()
 {
-	if (settings == NULL)
-		return;
+	QSettings* settings = *gRunnerInstance->settings;
+	if (settings == NULL) return;
 
 	settings->beginWriteArray("runner/cmds");
 	for(int i = 0; i < table->rowCount(); ++i) {

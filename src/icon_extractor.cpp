@@ -29,34 +29,22 @@ IconExtractor::IconExtractor()
 }
 
 
-void IconExtractor::processIcon(const CatItem& item, bool highPriority)
+void IconExtractor::processIcon(CatItem item, bool highPriority)
 {
 	mutex.lock();
 
+	item.id = -1;
 	if (highPriority)
-	{
-		// use an id of -1 to indicate high priority
-		if (items.count() > 0 && items[0].id == -1)
-		{
-			items.replace(0, item);
-		}
-		else
-		{
-			items.push_front(item);
-		}
-		items[0].id = -1;
-	}
+		items.push_front(item);
 	else
-	{
 		items.push_back(item);
-	}
 
 	mutex.unlock();
 #ifdef Q_WS_MAC
         run();
 #else
 	if (!isRunning())
-		start(LowPriority);
+		start(LowestPriority);
 #endif
     }
 
@@ -68,7 +56,7 @@ void IconExtractor::processIcons(const QList<CatItem>& newItems, bool reset)
 	int itemCount = items.size();
 	if (reset && itemCount > 0 && isRunning())
 	{
-		// reset the queue, but keep the most recent high priority item
+		// keep the most recent high priority item in the queue
 		CatItem item = items.dequeue();
 		items.clear();
 		if (item.id == -1)
@@ -117,10 +105,7 @@ void IconExtractor::run()
 			item = items.dequeue();
 		mutex.unlock();
 		if (itemsRemaining)
-		{
-			QIcon icon = getIcon(item);
-			emit iconExtracted(item.id, item.fullPath, icon);
-		}
+			emit iconExtracted(item.id, getIcon(item));
 	}
 	while (itemsRemaining);
 
@@ -132,8 +117,6 @@ void IconExtractor::run()
 
 QIcon IconExtractor::getIcon(const CatItem& item)
 {
-	qDebug() << "Fetching icon for" << item.fullPath;
-
 #ifdef Q_WS_MAC
     if (item.icon.endsWith(".png") || item.icon.endsWith(".ico"))
         return QIcon(item.icon);

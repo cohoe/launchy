@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "ui_dlg.h"
 #include "globals.h"
-#include <QSettings>
+
 
 class Gui : public QWidget, private Ui::Dlg
 {
@@ -30,7 +30,7 @@ class Gui : public QWidget, private Ui::Dlg
 private:
 	QList<WebySite> sites;
 public:
-	Gui(QWidget* parent, QSettings* settings);
+	Gui(QWidget* parent);
 	~Gui() { this->hide(); }
 	void writeOptions();
 	QString defaultName;
@@ -45,8 +45,6 @@ public slots:
 
 private:
 	void appendRow(const QString& name, const QString& path);
-
-	QSettings* settings;
 };
 
 #endif 

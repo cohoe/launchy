@@ -166,7 +166,7 @@ void PlatformUnix::alterItem(CatItem* item) {
             
             line = QString::fromUtf8(file.readLine());
 
-            while(!file.atEnd() && !line.startsWith("[", Qt::CaseInsensitive)) {
+            while(!line.startsWith("[", Qt::CaseInsensitive)) {
 
                 if (line.startsWith("Name[" + locale, Qt::CaseInsensitive)) 
                     name = line.split("=")[1].trimmed();
@@ -179,7 +179,16 @@ void PlatformUnix::alterItem(CatItem* item) {
                 else if (line.startsWith("NoDisplay"))
                     nodisplay = line.split("=")[1].trimmed(); 
 
-                line = QString::fromUtf8(file.readLine());
+                // Fix for regression where we were ignoring the 
+                // last line line in the file (which if it was an icon
+                // would be fatal.
+                if (!file.atEnd()) {
+                    line = QString::fromUtf8(file.readLine());
+                    continue;
+                }
+
+                // We're done now.
+                break;
             }
 
         }

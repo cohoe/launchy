@@ -1,6 +1,6 @@
 /*
 Launchy: Application Launcher
-Copyright (C) 2007-2010  Josh Karlin, Simon Capewell
+Copyright (C) 2007-2009 Josh Karlin, Simon Capewell
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -42,10 +42,6 @@ OptionsDialog::OptionsDialog(QWidget * parent) :
 	restoreGeometry(windowGeometry);
 	tabWidget->setCurrentIndex(currentTab);
 
-#ifdef Q_WS_WIN
-	about_homepage->setText(about_homepage->text() + \
-		"<p><br>If you would like to uninstall Launchy, please close Launchy and run \"Uninstall Launchy\" from the start menu.</br></p>");
-#endif
 	// Load General Options
 	if (QSystemTrayIcon::isSystemTrayAvailable())
 		genShowTrayIcon->setChecked(gSettings->value("GenOps/showtrayicon", true).toBool());
@@ -63,7 +59,8 @@ OptionsDialog::OptionsDialog(QWidget * parent) :
 	genUpdateCheck->setChecked(gSettings->value("GenOps/updatecheck", true).toBool());
 	genShowHidden->setChecked(gSettings->value("GenOps/showHiddenFiles", false).toBool());
 	genShowNetwork->setChecked(gSettings->value("GenOps/showNetwork", true).toBool());
-        genCondensed->setCurrentIndex(gSettings->value("GenOps/condensedView", 2).toInt());
+	genUseWildcards->setChecked(gSettings->value("GenOps/wildcardFileSearch", false).toBool());
+	genCondensed->setCurrentIndex(gSettings->value("GenOps/condensedView", 0).toInt());
 	genAutoSuggestDelay->setValue(gSettings->value("GenOps/autoSuggestDelay", 1000).toInt());
 	int updateInterval = gSettings->value("GenOps/updatetimer", 10).toInt();
 	connect(genUpdateCatalog, SIGNAL(stateChanged(int)), this, SLOT(autoUpdateCheckChanged(int)));
@@ -78,8 +75,8 @@ OptionsDialog::OptionsDialog(QWidget * parent) :
 	connect(genOpaqueness, SIGNAL(sliderMoved(int)), gMainWidget, SLOT(setOpaqueness(int)));
 
 #ifdef Q_WS_MAC
-	metaKeys << tr("") << tr("Alt") << tr("Command") << tr("Shift") << tr("Control") <<
-				tr("Command+Alt") << tr("Command+Shift") << tr("Command+Control");
+        metaKeys << tr("") << tr("Alt") << tr("Command") << tr("Shift") << tr("Control") <<
+                tr("Command+Alt") << tr("Command+Shift") << tr("Command+Control");
 #else
 	metaKeys << tr("") << tr("Alt") << tr("Control") << tr("Shift") << tr("Win") <<
 		tr("Ctrl+Alt") << tr("Ctrl+Shift") << tr("Ctrl+Win");
@@ -148,7 +145,7 @@ OptionsDialog::OptionsDialog(QWidget * parent) :
 	QHash<QString, bool> knownSkins;
 	foreach(QString szDir, settings.directory("skins"))
 	{
-		QDir dir(szDir);
+                QDir dir(szDir);
 		QStringList dirs = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
 
 		foreach(QString d, dirs)
@@ -188,10 +185,26 @@ OptionsDialog::OptionsDialog(QWidget * parent) :
 	connect(catCheckDirs, SIGNAL(stateChanged(int)), this, SLOT(catTypesDirChanged(int)));
 	connect(catCheckBinaries, SIGNAL(stateChanged(int)), this, SLOT(catTypesExeChanged(int)));
 	connect(catDepth, SIGNAL(valueChanged(int)),this, SLOT(catDepthChanged(int)));
+	catRescan->setEnabled(gBuilder == NULL);
 	connect(catRescan, SIGNAL(clicked(bool)), this, SLOT(catRescanClicked(bool)));
-	catProgress->setVisible(false);
+	int size = gSettings->beginReadArray("directories");
+	for (int i = 0; i < size; ++i)
+	{
+		gSettings->setArrayIndex(i);
+		Directory tmp;
+		tmp.name = gSettings->value("name").toString();
+		tmp.types = gSettings->value("types").toStringList();
+		tmp.indexDirs = gSettings->value("indexDirs", false).toBool();
+		tmp.indexExe = gSettings->value("indexExes", false).toBool();
+		tmp.depth = gSettings->value("depth", 100).toInt();
+		memDirs.append(tmp);
+	}
+	gSettings->endArray();
+	if (memDirs.count() == 0)
+	{
+		memDirs = platform->getDefaultCatalogDirectories();
+	}
 
-	memDirs = SettingsManager::readCatalogDirectories();
 	for (int i = 0; i < memDirs.count(); ++i)
 	{
 		catDirectories->addItem(memDirs[i].name);
@@ -207,14 +220,11 @@ OptionsDialog::OptionsDialog(QWidget * parent) :
 	{
 		catSize->setText(tr("Index has %n item(s)", "", gMainWidget->catalog->count()));
 	}
-
-	connect(gBuilder, SIGNAL(catalogIncrement(int)), this, SLOT(catalogProgressUpdated(int)));
-	connect(gBuilder, SIGNAL(catalogFinished()), this, SLOT(catalogBuilt()));
-	if (gBuilder->isRunning())
+	if (gBuilder != NULL)
 	{
-		catalogProgressUpdated(gBuilder->getProgress());
+		connect(gBuilder.get(), SIGNAL(catalogIncrement(float)), this, SLOT(catProgressUpdated(float)));
+		connect(gBuilder.get(), SIGNAL(catalogFinished()), this, SLOT(catalogBuilt()));
 	}
-
 	// Load up the plugins		
 	connect(plugList, SIGNAL(currentRowChanged(int)), this, SLOT(pluginChanged(int)));
 	connect(plugList, SIGNAL(itemChanged(QListWidgetItem*)), this, SLOT(pluginItemChanged(QListWidgetItem*)));
@@ -246,8 +256,8 @@ OptionsDialog::~OptionsDialog()
 {
 	if (gBuilder != NULL)
 	{
-		disconnect(gBuilder, SIGNAL(catalogIncrement(int)), this, SLOT(catalogProgressUpdated(int)));
-		disconnect(gBuilder, SIGNAL(catalogFinished()), this, SLOT(catalogBuilt()));
+		disconnect(gBuilder.get(), SIGNAL(catalogIncrement(float)), this, SLOT(catProgressUpdated(float)));
+		disconnect(gBuilder.get(), SIGNAL(catalogFinished()), this, SLOT(catalogBuilt()));
 	}
 
 	currentTab = tabWidget->currentIndex();
@@ -262,7 +272,7 @@ void OptionsDialog::setVisible(bool visible)
 	if (visible)
 	{
 		connect(skinList, SIGNAL(currentTextChanged(const QString)), this, SLOT(skinChanged(const QString)));
-		skinChanged(skinList->currentItem()->text());
+                skinChanged(skinList->currentItem()->text());
 	}
 }
 
@@ -293,6 +303,7 @@ void OptionsDialog::accept()
 	gSettings->setValue("GenOps/dragmode", genShiftDrag->isChecked() ? 1 : 0);
 	gSettings->setValue("GenOps/showHiddenFiles", genShowHidden->isChecked());
 	gSettings->setValue("GenOps/showNetwork", genShowNetwork->isChecked());
+	gSettings->setValue("GenOps/wildcardFileSearch", genUseWildcards->isChecked());
 	gSettings->setValue("GenOps/condensedView", genCondensed->currentIndex());
 	gSettings->setValue("GenOps/autoSuggestDelay", genAutoSuggestDelay->value());
 	gSettings->setValue("GenOps/updatetimer", genUpdateCatalog->isChecked() ? genUpdateMinutes->value() : 0);
@@ -308,12 +319,11 @@ void OptionsDialog::accept()
 
 	// Apply General Options
 	settings.setPortable(genPortable->isChecked());
-	gMainWidget->startUpdateTimer();
 	gMainWidget->setSuggestionListMode(genCondensed->currentIndex());
 	gMainWidget->loadOptions();
 
 	// Apply Directory Options
-	SettingsManager::writeCatalogDirectories(memDirs);
+	saveCatalogOptions();
 
 	if (curPlugin >= 0)
 	{
@@ -371,8 +381,8 @@ void OptionsDialog::tabChanged(int tab)
 	}
 	else if (tabWidget->currentWidget()->objectName() == "Plugins")
 	{
-		// We've currently no way of checking if a plugin requires a catalog rescan
-		// so assume that we need one if the user has viewed the plugins tab
+		// We've currently no way of checking is a plugin requires a catalog rescan
+		// assume that 
 		needRescan = true;
 	}
 }
@@ -391,8 +401,8 @@ void OptionsDialog::skinChanged(const QString& newSkin)
 	if (newSkin.count() == 0)
 		return;
 
-	// Find the skin with this name
-	QString directory = settings.skinPath(newSkin);
+    // Find the skin with this name
+    QString directory = settings.skinPath(newSkin);
 
 	// Load up the author file
 	if (directory.length() == 0)
@@ -481,16 +491,11 @@ void OptionsDialog::pluginChanged(int row)
 	// Open the new plugin dialog
 	curPlugin = row;
 	currentPlugin = row;
-	if (row >= 0)
-	{
-		loadPluginDialog(plugList->item(row));
-	}
-}
-
-
-void OptionsDialog::loadPluginDialog(QListWidgetItem* item)
-{
+	if (row < 0)
+		return;	
+	QListWidgetItem* item = plugList->item(row);
 	QWidget* win = gMainWidget->plugins.doDialog(plugBox, item->data(Qt::UserRole).toUInt());
+
 	if (win != NULL)
 	{
 		if (plugBox->layout() != NULL)
@@ -539,29 +544,22 @@ void OptionsDialog::pluginItemChanged(QListWidgetItem* iz)
 	// If enabled, reload the dialog
 	if (iz->checkState() == Qt::Checked)
 	{
-		loadPluginDialog(iz);
+		gMainWidget->plugins.doDialog(plugBox, iz->data(Qt::UserRole).toUInt());
 	}
 }
 
 
-void OptionsDialog::catalogProgressUpdated(int value)
+void OptionsDialog::catProgressUpdated(float val)
 {
-	catSize->setVisible(false);
-	catProgress->setValue(value);
-	catProgress->setVisible(true);
-	catRescan->setEnabled(false);
+	catProgress->setValue((int) val);
 }
 
 
 void OptionsDialog::catalogBuilt()
 {
-	catProgress->setVisible(false);
 	catRescan->setEnabled(true);
 	if (gMainWidget->catalog != NULL)
-	{
 		catSize->setText(tr("Index has %n items", "", gMainWidget->catalog->count()));
-		catSize->setVisible(true);
-	}
 }
 
 
@@ -570,11 +568,16 @@ void OptionsDialog::catRescanClicked(bool val)
 	val = val; // Compiler warning
 
 	// Apply Directory Options
-	SettingsManager::writeCatalogDirectories(memDirs);
+	saveCatalogOptions();
 
-	needRescan = false;
-	catRescan->setEnabled(false);
-	gMainWidget->buildCatalog();
+	if (gBuilder == NULL)
+	{
+		needRescan = false;
+		catRescan->setEnabled(false);
+		gMainWidget->buildCatalog();
+		connect(gBuilder.get(), SIGNAL(catalogFinished()), this, SLOT(catalogBuilt()));
+		connect(gBuilder.get(), SIGNAL(catalogIncrement(float)), this, SLOT(catProgressUpdated(float)));
+	}
 }
 
 
@@ -681,11 +684,18 @@ void OptionsDialog::catDirMinusClicked(bool c)
 void OptionsDialog::catDirPlusClicked(bool c)
 {
 	c = c; // Compiler warning
-	addDirectory("", true);
+	QString dir = QFileDialog::getExistingDirectory(this, tr("Select a directory"),
+		lastDir,
+		QFileDialog::ShowDirsOnly);
+	if (dir != "")
+	{
+		lastDir = dir;
+		addDirectory(dir);
+	}
 }
 
 
-void OptionsDialog::addDirectory(const QString& directory, bool edit)
+void OptionsDialog::addDirectory(const QString& directory)
 {
 	QString nativeDir = QDir::toNativeSeparators(directory);
 	Directory dir(nativeDir);
@@ -695,10 +705,6 @@ void OptionsDialog::addDirectory(const QString& directory, bool edit)
 	QListWidgetItem* item = new QListWidgetItem(nativeDir, catDirectories);
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
 	catDirectories->setCurrentItem(item);
-	if (edit)
-	{
-		catDirectories->editItem(item);
-	}
 
 	needRescan = true;
 }
@@ -766,4 +772,21 @@ void OptionsDialog::catDepthChanged(int d)
 		memDirs[row].depth = d;
 
 	needRescan = true;
+}
+
+
+void OptionsDialog::saveCatalogOptions()
+{
+	gSettings->beginWriteArray("directories");
+	for (int i = 0; i < memDirs.count(); ++i)
+	{
+		gSettings->setArrayIndex(i);
+		gSettings->setValue("name", memDirs[i].name);
+		gSettings->setValue("types", memDirs[i].types);
+		gSettings->setValue("indexDirs", memDirs[i].indexDirs);
+		gSettings->setValue("indexExes", memDirs[i].indexExe);
+		gSettings->setValue("depth", memDirs[i].depth);
+	}
+
+	gSettings->endArray();
 }
