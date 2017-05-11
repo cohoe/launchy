@@ -9,7 +9,7 @@ your start menu, the icons on your desktop, and even your file manager.
 Launchy indexes the programs in your start menu and can launch your documents,
 project files, folders, and bookmarks with just a few keystrokes!
 
-Further information can be found in the readmes directory.
+Further information can be found in the [readmes](/readmes) directory.
 
 # This Release
 The original author has abandoned this project. As such several bugs 
