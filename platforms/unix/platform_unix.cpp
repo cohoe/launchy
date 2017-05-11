@@ -157,38 +157,41 @@ void PlatformUnix::alterItem(CatItem* item) {
     QString name = "";
     QString icon = "";
     QString exe = "";
+    QString nodisplay = "false";
     while(!file.atEnd()) {
-	QString line = file.readLine();
 
-        if (name == "") {
-            if (line.startsWith("Name[" + locale, Qt::CaseInsensitive)) {
-                name = line.split("=")[1].trimmed();
-                continue;
-            }
-            else if (line.startsWith("Name=", Qt::CaseInsensitive)) {
-                name = line.split("=")[1].trimmed();
-                continue;
-            }
-        }
+	   QString line = QString::fromUtf8(file.readLine());
+    
+        if (line.startsWith("[Desktop Entry]", Qt::CaseInsensitive)) {
+            
+            line = QString::fromUtf8(file.readLine());
 
-        if (icon == "") {
-            if (line.startsWith("Icon", Qt::CaseInsensitive)) {
-                icon = line.split("=")[1].trimmed();
-                continue;
-            }
-        }
+            while(!file.atEnd() && !line.startsWith("[", Qt::CaseInsensitive)) {
 
-        if (exe == "") {
-	    if (line.startsWith("Exec", Qt::CaseInsensitive)) {
-                exe = line.section("=", 1).trimmed();
-                continue;
+                if (line.startsWith("Name[" + locale, Qt::CaseInsensitive)) 
+                    name = line.split("=")[1].trimmed();
+                else if (line.startsWith("Name=", Qt::CaseInsensitive)) 
+                    name = line.split("=")[1].trimmed();
+                else if (line.startsWith("Icon", Qt::CaseInsensitive))
+                    icon = line.split("=")[1].trimmed();
+                else if (line.startsWith("Exec", Qt::CaseInsensitive))
+                    exe = line.split("=")[1].trimmed(); 
+                else if (line.startsWith("NoDisplay"))
+                    nodisplay = line.split("=")[1].trimmed(); 
+
+                line = QString::fromUtf8(file.readLine());
             }
+
         }
     }
-    if (name.size() >= item->shortName.size() - 8) {
-	item->shortName = name;
-	item->lowName = item->shortName.toLower();
-    }
+
+    if (nodisplay.startsWith("true", Qt::CaseInsensitive))
+        return;
+    
+    //if (name.size() >= item->shortName.size() - 8) {
+	   item->shortName = name;
+	   item->lowName = item->shortName.toLower();
+    //}
 
     // Don't index desktop items wthout icons
     if (icon.trimmed() == "")
