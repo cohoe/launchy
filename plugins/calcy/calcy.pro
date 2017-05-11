@@ -26,8 +26,8 @@ if(!debug_and_release|build_pass):CONFIG(release, debug|release):DESTDIR = ../..
 
 unix:!macx {
     PREFIX = /usr
-    target.path = $$PREFIX/lib/launchy/plugins/
-    icon.path = $$PREFIX/lib/launchy/plugins/icons/
+    target.path = $$PREFIX/lib64/launchy/plugins/
+    icon.path = $$PREFIX/lib64/launchy/plugins/icons/
     icon.files = calcy.png
     INSTALLS += target \
         icon

@@ -24,8 +24,8 @@ if(!debug_and_release|build_pass):CONFIG(debug, debug|release):DESTDIR = ../../d
 if(!debug_and_release|build_pass):CONFIG(release, debug|release):DESTDIR = ../../release/plugins
 unix:!macx {
     PREFIX = /usr
-    target.path = $$PREFIX/lib/launchy/plugins/
-    icon.path = $$PREFIX/lib/launchy/plugins/icons/
+    target.path = $$PREFIX/lib64/launchy/plugins/
+    icon.path = $$PREFIX/lib64/launchy/plugins/icons/
     icon.files = verby.png copy.png opencontainer.png properties.png run.png
     INSTALLS += target \
         icon

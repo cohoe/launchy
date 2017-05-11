@@ -70,8 +70,8 @@ unix:!macx {
 
     PREFIX = /usr
     DEFINES += SKINS_PATH=\\\"$$PREFIX/share/launchy/skins/\\\" \
-        PLUGINS_PATH=\\\"$$PREFIX/lib/launchy/plugins/\\\" \
-        PLATFORMS_PATH=\\\"$$PREFIX/lib/launchy/\\\"
+        PLUGINS_PATH=\\\"$$PREFIX/lib64/launchy/plugins/\\\" \
+        PLATFORMS_PATH=\\\"$$PREFIX/lib64/launchy/\\\"
     if(!debug_and_release|build_pass) { 
         CONFIG(debug, debug|release):DESTDIR = ../debug/
         CONFIG(release, debug|release):DESTDIR = ../release/
