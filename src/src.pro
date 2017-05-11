@@ -71,6 +71,9 @@ unix:!macx {
                 platform_base_hotkey.h \
                 platform_base_hottrigger.h
 
+    # Patch from Fedora (original author unknown)
+    LIBS = -lX11
+
     PREFIX = /usr
     DEFINES += SKINS_PATH=\\\"$$PREFIX/share/launchy/skins/\\\" \
         PLUGINS_PATH=\\\"$$PREFIX/lib/launchy/plugins/\\\" \

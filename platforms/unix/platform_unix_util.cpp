@@ -15,6 +15,8 @@ UnixIconProvider::UnixIconProvider() {
 	xdgDataDirs = spl[1].split(":");	
     }
     xdgDataDirs += "/usr/share/icons/";
+    // Patch from Fedora (original author unknown)
+    xdgDataDirs += "/usr/share/";
 }
 
 
