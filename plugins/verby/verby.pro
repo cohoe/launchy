@@ -32,8 +32,8 @@ win32:debug:%QMAKE_CXXFLAGS += /ZI
 }
 unix:!macx {
     PREFIX = /usr
-    target.path = $$PREFIX/lib/launchy/plugins/
-    icon.path = $$PREFIX/lib/launchy/plugins/icons/
+    target.path = $$PREFIX/lib64/launchy/plugins/
+    icon.path = $$PREFIX/lib64/launchy/plugins/icons/
     icon.files = verby.png copy.png opencontainer.png properties.png run.png
     INSTALLS += target \
         icon

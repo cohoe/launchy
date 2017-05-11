@@ -20,9 +20,9 @@ if(!debug_and_release|build_pass):CONFIG(debug, debug|release):DESTDIR = ../../d
 if(!debug_and_release|build_pass):CONFIG(release, debug|release):DESTDIR = ../../release/plugins
 unix:!macx {
     PREFIX = /usr
-    target.path = $$PREFIX/lib/launchy/plugins/
+    target.path = $$PREFIX/lib64/launchy/plugins/
     
-    # icon.path = $$PREFIX/lib/launchy/plugins/icons/
+    # icon.path = $$PREFIX/lib64/launchy/plugins/icons/
     # icon.files = gcalc.png
     INSTALLS += target
 }
