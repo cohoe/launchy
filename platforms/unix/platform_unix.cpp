@@ -158,19 +158,32 @@ void PlatformUnix::alterItem(CatItem* item) {
     QString icon = "";
     QString exe = "";
     while(!file.atEnd()) {
-	QString line = QString::fromUtf8(file.readLine());
-	
-	if (line.startsWith("Name[" + locale, Qt::CaseInsensitive)) 
-	    name = line.split("=")[1].trimmed();
-	
+	QString line = file.readLine();
 
-	else if (line.startsWith("Name=", Qt::CaseInsensitive)) 
-	    name = line.split("=")[1].trimmed();
+        if (name == "") {
+            if (line.startsWith("Name[" + locale, Qt::CaseInsensitive)) {
+                name = line.split("=")[1].trimmed();
+                continue;
+            }
+            else if (line.startsWith("Name=", Qt::CaseInsensitive)) {
+                name = line.split("=")[1].trimmed();
+                continue;
+            }
+        }
 
-	else if (line.startsWith("Icon", Qt::CaseInsensitive))
-	    icon = line.split("=")[1].trimmed();
-	else if (line.startsWith("Exec", Qt::CaseInsensitive))
-	    exe = line.split("=")[1].trimmed();	
+        if (icon == "") {
+            if (line.startsWith("Icon", Qt::CaseInsensitive)) {
+                icon = line.split("=")[1].trimmed();
+                continue;
+            }
+        }
+
+        if (exe == "") {
+	    if (line.startsWith("Exec", Qt::CaseInsensitive)) {
+                exe = line.section("=", 1).trimmed();
+                continue;
+            }
+        }
     }
     if (name.size() >= item->shortName.size() - 8) {
 	item->shortName = name;
